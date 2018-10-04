@@ -14,11 +14,12 @@ read more stuff!!
 
 
 
+
 #Packages and WD
 ```{r Packages and WD}
 setwd("/Users/kennethenevoldsen/Desktop/Bachelor/Bachelor_code/Bachelor/")
 library(pacman)
-p_load(plyr, tidyverse, raster, reshape2, knitr, brms)
+p_load(plyr, tidyverse, raster, reshape2, knitr, brms, boot)
 ```
 
 #Game board
@@ -58,13 +59,13 @@ qplot(x, y, fill=color, data=x1, geom='tile') + scale_fill_manual(values = colou
 
 #Payoff matrix
 ```{r Payoff matrix}
-choices <- c("stag", "rabbit")
+choice_mapping <- data_frame(stag = c(1), rabbit = c(0))
 
 pretty_p_matrix <- data_frame(x = c("stag", "rabbit"), stag = c("5,5", "3,0"), rabbit = c("0,3", "3,3"))
 pretty_p_matrix
 
-p_matrix <- data_frame(p1_choice = c("stag", "rabbit", "stag", "rabbit"), 
-                       p2_choice = c("stag", "stag", "rabbit", "rabbit"), 
+p_matrix <- data_frame(p1_choice = c(1, 0, 1, 0), 
+                       p2_choice = c(1, 1, 0, 0), 
                        p1_reward = c(5, 3, 0, 3), 
                        p2_reward = c(5, 0, 3, 3)) 
 p_matrix
@@ -73,32 +74,42 @@ p_matrix
 #Strategies
 ```{r Strategies}
 ###creating strategies:
+  #test=rnorm(n = 100, mean = 0.5, sd = 0.1) #?# an example of a distribition from which it could be sampled
 
 #random choice
 random_choice <- function(ID){
-  choice <- sample(c("stag", "rabbit"), 1) #randomly select rabbit or stag
+  if (is.na(part_df$sample_param[part_df$ID == ID])){ #if the participant does not have a distribution we will make one (this creates individual biases in random judgement) #?# does this make sense?
+    #generates individual differences (personal biases)
+    part_df$sample_param_mean[part_df$ID == ID] <-  rnorm(1, mean = 0.5, sd = 0.1)
+    part_df$sample_param_sd[part_df$ID == ID] <-  rnorm(1, mean = 0.1, sd = 0.01)
+  }
+  
+  p <- part_df[part_df$ID == ID,]
+  
+  #randomly select rabbit or stag
+  choice <- rbinom(1, 1, prob = rnorm(1, mean = p$sample_param_mean, sd = p$sample_param_sd)) 
   return(choice)
 }
 
 
-#Win stay loose switch 1  (biased Nash) - should capture both nash, however this does not differentiate between reward
-noise_level_WSLS1 <- rnorm(1, mean = .10, sd = 0.01)
-WSLS1 <- function(ID){ 
+#Win stay loose switch (biased Nash) - should capture both nash, however this does not differentiate between reward
+noise_level_WSLS <- rnorm(1, mean = .10, sd = 0.01)
+WSLS <- function(ID){ 
   current_pair <-  paste(pairs[pair,], collapse = "/")
   last_round <- result_df[result_df$pair == current_pair & result_df$round_nr == n_round-1,]
 
   if (empty(last_round)){ #if there was no last round then select randomly
-    choice <- sample(c("stag", "rabbit"), 1) 
+    choice <- rbinom(1, 1, prob = 0.5)
   } else if (last_round$points[last_round$ID == ID] > 0){ #elif: choose the same
     choice <- last_round$choice[last_round$ID == ID]
-  } else { #else choose 
-    choice <- choices[choices != last_round$choice[last_round$ID == ID]]
+  } else { #else choose the opposite
+    choice <- 1 - last_round$choice[last_round$ID == ID]
   }
 
   #add noise
-  choice <- sample(c(choice, choices[choices != choice]), 
+  choice <- sample(c(choice, 1-choice), 
          1, 
-         prob=c(1-noise_level_WSLS1, noise_level_WSLS1))
+         prob=c(1-noise_level_WSLS, noise_level_WSLS))
   
   return(choice)
 }
@@ -142,11 +153,11 @@ WSLS2 <- function(ID){ #!# not tested
 #Creating participants and setting number of rounds and participant
 ```{r Creating part and setting variables}
  #number of participants
-n_p <- 100
+n_p <- 10
 
   #percentage of strategies in participants
 strategy_list <- c("random_choice", "WSLS1", "WSLS2")
-strategy_prop <- c(0.2, 0.8, 0.0)
+strategy_prop <- c(1.0, 0.0, 0.0)
 
 #number of round
 n_rounds <- 10
@@ -156,7 +167,8 @@ matchup_type = "random"
 
   #creating participant according to percantage
 part_df <- data_frame(ID=seq(n_p), 
-    strategy=sample(strategy_list, n_p, prob=strategy_prop, replace=TRUE))
+    strategy=sample(strategy_list, n_p, prob=strategy_prop, replace=TRUE),
+    sample_param_mean = NA, sample_param_sd = NA)
 part_df$strategy <- as.character(part_df$strategy)
 
 ```
