@@ -1,0 +1,255 @@
+---
+title: "StagHunt"
+author: "Kenneth Enevoldsen"
+date: "9/19/2018"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+#To do
+create the WSLS
+read more stuff!!
+
+
+
+
+#Packages and WD
+```{r Packages and WD}
+setwd("/Users/kennethenevoldsen/Desktop/Bachelor/Bachelor_code/Bachelor/")
+library(pacman)
+p_load(plyr, tidyverse, raster, reshape2, knitr, brms)
+```
+
+#Game board
+```{r  Game board}
+#0: Dark space
+#1: Walkable space
+#2: Rabbit
+#3: Stag
+#4: Player 1 
+#5: Player 2
+
+  #creating the board
+map_grid <- c(0, 0, 2, 0, 0, rep(1, 5), 1, 0, 1, 0, 1, rep(1,5), 0, 0, 2, 0, 0)
+Stagmatrix <- matrix(data = map_grid, nrow = 5)
+
+#simple plot
+ # plot(raster(Stagmatrix))
+
+
+#trying it out with players and stag
+Stagmatrix[1,2] = 4
+Stagmatrix[3,2] = 3
+Stagmatrix[5,4] = 5
+
+x1=melt(t(Stagmatrix))
+names(x1)=c("x","y","color")
+
+  
+  #specifying the colors for the factors
+x1$color=factor(x1$color)
+levels(x1$color)=c("dark","walk", "rabbit", "stag", "player1", "player2")
+colours = c("dark" = "black", "walk" = "white",  "rabbit" = "red4", "stag" = "red", "player1" = "green", "player2" = "green4")
+
+  #plotting the board
+qplot(x, y, fill=color, data=x1, geom='tile') + scale_fill_manual(values = colours)
+```
+
+#Payoff matrix
+```{r Payoff matrix}
+choices <- c("stag", "rabbit")
+
+pretty_p_matrix <- data_frame(x = c("stag", "rabbit"), stag = c("5,5", "3,0"), rabbit = c("0,3", "3,3"))
+pretty_p_matrix
+
+p_matrix <- data_frame(p1_choice = c("stag", "rabbit", "stag", "rabbit"), 
+                       p2_choice = c("stag", "stag", "rabbit", "rabbit"), 
+                       p1_reward = c(5, 3, 0, 3), 
+                       p2_reward = c(5, 0, 3, 3)) 
+p_matrix
+```
+
+#Strategies
+```{r Strategies}
+###creating strategies:
+
+#random choice
+random_choice <- function(ID){
+  choice <- sample(c("stag", "rabbit"), 1) #randomly select rabbit or stag
+  return(choice)
+}
+
+
+#Win stay loose switch 1  (biased Nash) - should capture both nash, however this does not differentiate between reward
+noise_level_WSLS1 <- rnorm(1, mean = .10, sd = 0.01)
+WSLS1 <- function(ID){ 
+  current_pair <-  paste(pairs[pair,], collapse = "/")
+  last_round <- result_df[result_df$pair == current_pair & result_df$round_nr == n_round-1,]
+
+  if (empty(last_round)){ #if there was no last round then select randomly
+    choice <- sample(c("stag", "rabbit"), 1) 
+  } else if (last_round$points[last_round$ID == ID] > 0){ #elif: choose the same
+    choice <- last_round$choice[last_round$ID == ID]
+  } else { #else choose 
+    choice <- choices[choices != last_round$choice[last_round$ID == ID]]
+  }
+
+  #add noise
+  choice <- sample(c(choice, choices[choices != choice]), 
+         1, 
+         prob=c(1-noise_level_WSLS1, noise_level_WSLS1))
+  
+  return(choice)
+}
+
+#Win stay loose switch 2 - this differentiate between reward and is more likely to priotize COOP if it give positive results
+noise_level_WSLS2 <- rnorm(1, mean = .10, sd = 0.01)
+WSLS2 <- function(ID){ #!# not tested
+  current_pair <-  paste(pairs[pair,], collapse = "/")
+  last_round <- result_df[result_df$pair == current_pair & result_df$round_nr == n_round-1,]
+
+  if (empty(last_round)){ #if there was no last round then select randomly
+    choice <- sample(c("stag", "rabbit"), 1) #?# should this be sampled based on a distribution of the mean e.g. since the mean of choosing rabbit is higher choose rabbit or should it be samppled from a distribution based of of maximum value e.g. more likely to choose stag.
+    
+  } else if (last_round$points[last_round$ID == ID] > 0){ #elif: choose the same
+    choice <- last_round$choice[last_round$ID == ID]
+  } else { #else choose 
+    choice <- choices[choices != last_round$choice[last_round$ID == ID]]
+  }
+
+  #add noise
+  choice <- sample(c(choice, choices[choices != choice]), 
+         1, 
+         prob=c(1-noise_level_WSLS2, noise_level_WSLS2))
+  
+  return(choice)
+}
+
+#Reinforcement learning #?#Should I use Monte Carlo Method or Q-learning? (se slides on reinforcemnt)
+
+
+#kig på hvordan du laver disse:
+#1st
+  #tjek her
+#3rd
+
+#5th
+
+
+```
+
+#Creating participants and setting number of rounds and participant
+```{r Creating part and setting variables}
+ #number of participants
+n_p <- 100
+
+  #percentage of strategies in participants
+strategy_list <- c("random_choice", "WSLS1", "WSLS2")
+strategy_prop <- c(0.2, 0.8, 0.0)
+
+#number of round
+n_rounds <- 10
+
+#Matchup type
+matchup_type = "random"
+
+  #creating participant according to percantage
+part_df <- data_frame(ID=seq(n_p), 
+    strategy=sample(strategy_list, n_p, prob=strategy_prop, replace=TRUE))
+part_df$strategy <- as.character(part_df$strategy)
+
+```
+
+#Battle royale
+```{r Battle royale}
+
+#generating pairs to compete based on matchup type
+if (matchup_type == "random"){ 
+    #random matchup (participant is randomly matched up with another participant)
+  pairs <- matrix(sample(part_df$ID, n_p, replace=F), ncol = 2) #pairs the participants randomly
+} else if (matchup_type == "RR"){
+    #round robin matchup (each participant battles all other participants)
+  pairs <- t(combn(part_df$ID, 2)) #create all possible pairs
+} else {
+  print("ERROR: please chose a valid matchup_type")
+}
+
+
+
+#looping through the pairs making them compete for multiple rounds 
+for (pair in 1:nrow(pairs)){
+  print(pairs[pair,]) #!# should be removed but it is nice for now
+    for (n_round in 1:n_rounds){
+        #generate choice
+      
+      p1_choice <- do.call(part_df$strategy[part_df$ID == pairs[pair,1]], 
+                           args = list(pairs[pair,1]))#calls the strategy the players uses (fetched in part_df)
+      p2_choice <- do.call(part_df$strategy[part_df$ID == pairs[pair,2]], 
+                           args = list(ID = pairs[pair,2]))
+      
+        #generate result
+      result <- p_matrix[p_matrix$p1_choice == p1_choice & p_matrix$p2_choice == p2_choice,]
+      
+      #save results
+      round_result <- data_frame(ID = pairs[pair,], 
+                                 choice = c(p1_choice, p2_choice),
+                                 points = c(result$p1_reward, result$p2_reward), 
+                                 round_nr = n_round,
+                                 strategy = c(part_df$strategy[part_df$ID == pairs[pair,1]],
+                                              part_df$strategy[part_df$ID == pairs[pair,2]]),
+                                 pair = paste(pairs[pair,], collapse = "/")
+                                 )
+      
+      if (n_round == 1 & pair == 1){
+        result_df <- round_result
+      } else {
+        result_df <- rbind(result_df, round_result)
+      }
+    }
+}
+```
+
+#results
+```{r Results}
+#summing up the point for each partipant
+sum_result <- result_df %>% 
+  dplyr::group_by(ID, strategy) %>% 
+  dplyr::summarise(total_points = sum(points))
+sum_result
+
+#sum by strategy
+s
+
+
+```
+
+
+#Riccardo's code
+```{r RF code} 
+d<-d[complete.cases(d),]
+d$Left=as.numeric(d$Left)
+d$Handedness=1
+d$Handedness[d$Left==0]=-1
+d$Success=1
+d$Success[d$IndividualPayoff==0]=0
+d$Failure=0
+d$Failure[d$IndividualPayoff==0]=1
+d$X1=d$Handedness*d$Success
+d$X2=d$Handedness*d$Failure
+d$StayBias=c(NA,d$X1[1:(nrow(d)-1)])
+d$LeaveBias=-c(NA,d$X2[1:(nrow(d)-1)])
+
+WinStay <-
+  brm(
+    Left ~ 0 + StayBias + LeaveBias + (0 + StayBias + LeaveBias | Subject),
+    d,
+    family = bernoulli,
+    cores = 2,
+    chains = 2,
+    control = list(adapt_delta = 0.99, max_treedepth = 20),
+    iter = 3e3
+  )
+```
+
+
