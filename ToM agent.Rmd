@@ -9,7 +9,7 @@ library(pacman)
 p_load(plyr, tidyverse, raster, reshape2, knitr, brms, boot, rethinking)
 ```
 
-```{r 0 Tom}
+```{r 0 Tom} 
 ##ToM agent
 #see Devaine, et al. (2017) https://doi.org/10.1371/journal.pcbi.1005833
 
@@ -101,9 +101,38 @@ result_df <- result_df[1:2,] #for testing (example round one)
 #?# question for eq S2 - is the Ut-1 two round before the current rounds (e.g. is it not the same round as aopt?)
 ```
 
-```{r k>=1 ToM}
+#k>=1 ToM
+```{r "k>=1 ToM"} 
 #adding ToM for k>=1
+
+#?# hvor får 1-ToM sine estimates af modstanderen fra? 
+
+p_self <- functionx(mu_op, variance_op, sigma_op){
+  inv.logit(mu_op / sqrt(1 + (variance_op + sigma_op) * 3 / pi ^ 2)) #?# why 3/pi^2?
+}
+
+ToM1_prop_a.op1 <- function(p_self, beta){ #eq. S3
+  inv.logit((p_self*(U(1,1)-U(0,1))+(1-p_self)*(U(1,0)-U(0,0)))/beta)
+}
+
+t(matrix(seq(8), 2))
+p_load(pracma)
+dot(matrix(seq(4)), t(matrix(seq(4))))
+
+prop1 <- rnorm(10, 0.50, 0.1)
+propk <- rnorm(10, 0.50, 0.1)
+
+
+p.op <- function(prop1, propk) {
+  sum(prop1 * propk)
+}
+
+
+
+p.op.k function(x){
+  
+}
 
 
 ```
-
+#!# skriv equation numbers 

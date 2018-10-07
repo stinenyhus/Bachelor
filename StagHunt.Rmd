@@ -7,9 +7,11 @@ editor_options:
   chunk_output_type: console
 ---
 
-#make the competition into a vector operation
-apply(pairs, 1, sum) #simple example
-apply(pairs, 1, staghunt) #simple example
+To do:
+add equation number
+make the competition into a vector operation
+  apply(pairs, 1, sum) #simple example
+  apply(pairs, 1, staghunt) #simple example
 
 
 #Packages and WD
@@ -75,7 +77,7 @@ p_matrix
 ###_________________________ General _________________________###
 
 #utility function
-U <- function(a.self, a.op){
+U <- function(a.self, a.op){ 
   # takes two arguments
   # a.self: choice of self
   # a.op: choice of opponnent
@@ -83,8 +85,13 @@ U <- function(a.self, a.op){
   a.self*a.op*5 + (1-a.self)*3 #if both choose 1 you get 5 points and if you choose 0 you get 3 points
 }
 
+#Expected payoff
+payoff_difference <- function(prop_a.op1){
+  prop_a.op1*(U(1,1)-U(0,1))+(1-prop_a.op1)*(U(1,0)-U(0,0))
+}
+
 #softmax functions
-softmax <- function(e_payoff_diff, beta){
+softmax <- function(e_payoff_diff, beta){ 
   # Takes two arguments
     # expected payoff difference
     # a beta also called bahaivoural temperature - higher make the agent choice more random
@@ -144,7 +151,7 @@ random_choice <- function(ID){
 }
 
 #Win stay loose switch - should capture both nash, however this does not differentiate between reward
-WSLS <- function(ID){ 
+WSLS <- function(ID){ #!# not tested
   if (is.na(part_df$param[part_df$ID == ID])){ 
     #generates individual differences (personal biases)
     part_df$param[part_df$ID == ID] <-  list(c(noise = rnorm(1, mean = .10, sd = 0.1)))
@@ -167,7 +174,7 @@ WSLS <- function(ID){
 }
 
 #Tit for Tat - If you COOP I will COOP - this differentiate between reward and is more likely to priotize COOP if it given positive results
-SoftmaxTitTat <- function(ID) { #!# not tested
+SoftmaxTitTat <- function(ID) { #!# not tested 
   
   if (is.na(part_df$param[part_df$ID == ID])){ 
     #generates individual differences (personal biases)
