@@ -7,19 +7,16 @@ editor_options:
   chunk_output_type: console
 ---
 
-#To do
-create the WSLS
-read more stuff!!
-
-
-
+#make the competition into a vector operation
+apply(pairs, 1, sum) #simple example
+apply(pairs, 1, staghunt) #simple example
 
 
 #Packages and WD
 ```{r Packages and WD}
 setwd("/Users/kennethenevoldsen/Desktop/Bachelor/Bachelor_code/Bachelor/")
 library(pacman)
-p_load(plyr, tidyverse, raster, reshape2, knitr, brms, boot)
+p_load(plyr, tidyverse, raster, reshape2, knitr, brms, boot, rethinking)
 ```
 
 #Game board
@@ -58,87 +55,162 @@ qplot(x, y, fill=color, data=x1, geom='tile') + scale_fill_manual(values = colou
 ```
 
 #Payoff matrix
-```{r Payoff matrix}
+```{r Payoff matrix} 
 choice_mapping <- data_frame(stag = c(1), rabbit = c(0))
 
 pretty_p_matrix <- data_frame(x = c("stag", "rabbit"), stag = c("5,5", "3,0"), rabbit = c("0,3", "3,3"))
 pretty_p_matrix
 
-p_matrix <- data_frame(p1_choice = c(1, 0, 1, 0), 
+p_matrix <- data_frame(p1_choice = c(1, 0, 1, 0), #rm?
                        p2_choice = c(1, 1, 0, 0), 
                        p1_reward = c(5, 3, 0, 3), 
                        p2_reward = c(5, 0, 3, 3)) 
 p_matrix
 ```
 
-#Strategies
-```{r Strategies}
-###creating strategies:
-  #test=rnorm(n = 100, mean = 0.5, sd = 0.1) #?# an example of a distribition from which it could be sampled
+#Functions
+```{r functions}
+#contains a mixture of functions used for strategies
 
-#random choice
-random_choice <- function(ID){
-  if (is.na(part_df$sample_param[part_df$ID == ID])){ #if the participant does not have a distribution we will make one (this creates individual biases in random judgement) #?# does this make sense?
-    #generates individual differences (personal biases)
-    part_df$sample_param_mean[part_df$ID == ID] <-  rnorm(1, mean = 0.5, sd = 0.1)
-    part_df$sample_param_sd[part_df$ID == ID] <-  rnorm(1, mean = 0.1, sd = 0.01)
-  }
-  
-  p <- part_df[part_df$ID == ID,]
-  
-  #randomly select rabbit or stag
-  choice <- rbinom(1, 1, prob = rnorm(1, mean = p$sample_param_mean, sd = p$sample_param_sd)) 
-  return(choice)
+###_________________________ General _________________________###
+
+#utility function
+U <- function(a.self, a.op){
+  # takes two arguments
+  # a.self: choice of self
+  # a.op: choice of opponnent
+  # returns the point reward
+  a.self*a.op*5 + (1-a.self)*3 #if both choose 1 you get 5 points and if you choose 0 you get 3 points
+}
+
+#softmax functions
+softmax <- function(e_payoff_diff, beta){
+  # Takes two arguments
+    # expected payoff difference
+    # a beta also called bahaivoural temperature - higher make the agent choice more random
+  # Returns probability self choosing 1
+  1/(1 + exp(-(e_payoff_diff/beta)))
 }
 
 
-#Win stay loose switch (biased Nash) - should capture both nash, however this does not differentiate between reward
-noise_level_WSLS <- rnorm(1, mean = .10, sd = 0.01)
+
+###______________________ ToM specific _______________________###
+
+#Probability of opponnent a^op choosing 1
+prop_a.op1 <- function(mu, variance, sigma){
+  # takes in three arguments
+    # mu is approximate mean of 0-ToM posterior distribution
+    # variance is subjective uncertainty of the mean 
+    # sigma #?#
+  # returns probability of opponent choosing 1 
+  inv.logit(mu/sqrt(1+(variance+sigma)*3/pi^2))
+}
+
+mu_update <- function(mu, variance, a.op){
+  # takes 3 arguments
+    # mu from the round before
+    # variance form the round before
+    # a.op, which is the opponents choice last round
+  # returns an updated mu
+  mu + variance * (a.op - inv.logit(mu))
+}
+
+variance_update <- function(mu, variance, sigma) {
+  # takes 3 arguments
+    # mu from last round
+    # variance from last round
+    # sigma: higher values mean lower updating
+  #returns an updated variance
+  1 / (1 / (variance + sigma) + inv.logit(mu) * (1 - inv.logit(mu)))
+}
+
+```
+
+#Strategies
+```{r Strategies} 
+
+###______________________ Simple agents ______________________###
+
+#random choice
+random_choice <- function(ID){
+  if (is.na(part_df$param[part_df$ID == ID])){ 
+    #generates individual differences (personal biases)
+    part_df$param[part_df$ID == ID] <-  list(c(prop = inv.logit(rnorm(1, mean = 0, sd = 0.1)))) #?# er den her fin? (skal der ikke være en SD?)
+  }
+  
+  #randomly select rabbit or stag
+  choice <- rbinom(1, 1, prob = part_df$param[part_df$ID == ID][[1]]['prop']) 
+  return(choice)
+}
+
+#Win stay loose switch - should capture both nash, however this does not differentiate between reward
 WSLS <- function(ID){ 
+  if (is.na(part_df$param[part_df$ID == ID])){ 
+    #generates individual differences (personal biases)
+    part_df$param[part_df$ID == ID] <-  list(c(noise = rnorm(1, mean = .10, sd = 0.1)))
+  }
+  
   current_pair <-  paste(pairs[pair,], collapse = "/")
   last_round <- result_df[result_df$pair == current_pair & result_df$round_nr == n_round-1,]
 
   if (empty(last_round)){ #if there was no last round then select randomly
     choice <- rbinom(1, 1, prob = 0.5)
-  } else if (last_round$points[last_round$ID == ID] > 0){ #elif: choose the same
-    choice <- last_round$choice[last_round$ID == ID]
-  } else { #else choose the opposite
-    choice <- 1 - last_round$choice[last_round$ID == ID]
+  } else { #else WSLS
+    choice <- last_round$choice[last_round$ID == ID]*last_round$choice[last_round$ID != ID]
   }
-
+  
   #add noise
-  choice <- sample(c(choice, 1-choice), 
-         1, 
-         prob=c(1-noise_level_WSLS, noise_level_WSLS))
+  noise <- part_df$param[part_df$ID == ID][[1]]['noise']
+  choice <- rbinom(1, 1, prob = abs(choice - noise))
   
   return(choice)
 }
 
-#Win stay loose switch 2 - this differentiate between reward and is more likely to priotize COOP if it give positive results
-noise_level_WSLS2 <- rnorm(1, mean = .10, sd = 0.01)
-WSLS2 <- function(ID){ #!# not tested
+#Tit for Tat - If you COOP I will COOP - this differentiate between reward and is more likely to priotize COOP if it given positive results
+SoftmaxTitTat <- function(ID) { #!# not tested
+  
+  if (is.na(part_df$param[part_df$ID == ID])){ 
+    #generates individual differences (personal biases)
+    part_df$param[part_df$ID == ID] <-  list(c(bavioral_temp = rnorm(1, mean = .5, sd = 0.2)))
+  }
+  
+  beta <- part_df$param[part_df$ID == ID][[1]]['bavioral_temp']
+  
   current_pair <-  paste(pairs[pair,], collapse = "/")
   last_round <- result_df[result_df$pair == current_pair & result_df$round_nr == n_round-1,]
 
-  if (empty(last_round)){ #if there was no last round then select randomly
-    choice <- sample(c("stag", "rabbit"), 1) #?# should this be sampled based on a distribution of the mean e.g. since the mean of choosing rabbit is higher choose rabbit or should it be samppled from a distribution based of of maximum value e.g. more likely to choose stag.
-    
-  } else if (last_round$points[last_round$ID == ID] > 0){ #elif: choose the same
-    choice <- last_round$choice[last_round$ID == ID]
-  } else { #else choose 
-    choice <- choices[choices != last_round$choice[last_round$ID == ID]]
+  if (empty(last_round)) { #if there was no last round then select randomly based upon expected payoff
+    e_payoff_diff <- payoff_difference(beta)
+    choice <- rbinom(1, 1, prob = softmax(e_payoff_diff, beta)) #!# the beta should change based on individual
+  } else {
+  e_payoff_diff <- payoff_difference(last_round$choice[last_round$ID != ID])
+  choice <- rbinom(1, 1, prob = softmax(e_payoff_diff, beta))
   }
-
-  #add noise
-  choice <- sample(c(choice, choices[choices != choice]), 
-         1, 
-         prob=c(1-noise_level_WSLS2, noise_level_WSLS2))
   
   return(choice)
 }
 
+###_______________Reinforcement learning agents_______________###
+
 #Reinforcement learning #?#Should I use Monte Carlo Method or Q-learning? (se slides on reinforcemnt)
 
+###________________________ ToM agents _______________________###
+  
+  #see Devaine, et al. (2017) https://doi.org/10.1371/journal.pcbi.1005833
+
+#k=0
+ToM0 <- function(a.op, beta, sigma, mu, variance){
+  #update parameters based on previous choices 
+  variance <- variance_update(mu, variance, sigma) #!# make this into an update variable (måske)
+  mu <- mu_update(mu, variance, a.op)
+  
+  
+  e_prop_a.op1 <- prop_a.op1(mu, variance, sigma) #estimated probability of opponent chosing 1 in prop
+  e_payoff_diff <- payoff_difference(e_prop_a.op1) #estimated payoff difference
+  prop_a.self1 <- softmax(e_payoff_diff, beta) #probability of self chosing 1
+  
+  return(choice)
+}
 
 #kig på hvordan du laver disse:
 #1st
@@ -168,7 +240,7 @@ matchup_type = "random"
   #creating participant according to percantage
 part_df <- data_frame(ID=seq(n_p), 
     strategy=sample(strategy_list, n_p, prob=strategy_prop, replace=TRUE),
-    sample_param_mean = NA, sample_param_sd = NA)
+    param = NA)
 part_df$strategy <- as.character(part_df$strategy)
 
 ```
@@ -188,6 +260,8 @@ if (matchup_type == "random"){
 }
 
 
+
+apply(pairs, 1, staghunt)
 
 #looping through the pairs making them compete for multiple rounds 
 for (pair in 1:nrow(pairs)){
@@ -222,6 +296,7 @@ for (pair in 1:nrow(pairs)){
 }
 ```
 
+
 #results
 ```{r Results}
 #summing up the point for each partipant
@@ -230,8 +305,7 @@ sum_result <- result_df %>%
   dplyr::summarise(total_points = sum(points))
 sum_result
 
-#sum by strategy
-s
+
 
 
 ```
