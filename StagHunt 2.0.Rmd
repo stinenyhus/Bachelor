@@ -7,6 +7,11 @@ editor_options:
   chunk_output_type: console
 ---
 
+To do:
+  do a simulation of good sigma values (see RF simulation code)
+  add equation number
+
+
 #Packages and WD
 ```{r packages and wd}
 setwd("/Users/kennethenevoldsen/Desktop/Bachelor/Bachelor_code/Bachelor/")
@@ -292,7 +297,6 @@ SoftmaxTitTat <- function(ID, last_round, params = agents_df$params[agents_df$ID
 #Not added
 ```
 
-
 #k-ToM #!# WIP
 ```{r k-ToM} 
   #see Devaine, et al. (2017) https://doi.org/10.1371/journal.pcbi.1005833
@@ -434,9 +438,116 @@ sum_result <- result_df %>%
 sum_result
 ```
 
+#Export data
+```{r write csv}
+write_csv(sum_result, path = "sum_result.csv")
+write_csv(sum_result, path = "result_df.csv")
+```
+
+
+### ___ Random Code ___ ###
+
+#0-ToM
+```{r 0-ToM}
+
+###________________________ ToM agents _______________________###
+
+  #see Devaine, et al. (2017) https://doi.org/10.1371/journal.pcbi.1005833
+
+#k=0
+ToM0 <- function(ID){ 
+  if (is.na(part_df$param[part_df$ID == ID])){ 
+    #generates individual differences / starting point
+    part_df$param[part_df$ID == ID] <- list(c(bavioral_temp = rnorm(1, mean = .5, sd = 0.2), 
+                                              variance = rnorm(1, mean = 1.5, sd = 0.3),
+                                              mu = rnorm(1, mean = 0.5, sd = 0.2), #this is in logodds #!# set it up so people are slightly more likely to COOP
+                                              sigma = inv.logit(rnorm(1, mean = logit(0.3), sd = 0.2)) 
+                                              ))
+
+  }
+  #fetching info from the participant with the corresponding ID
+  beta <- part_df$param[part_df$ID == ID][[1]]['bavioral_temp']
+  variance <- part_df$param[part_df$ID == ID][[1]]['variance']
+  mu <- part_df$param[part_df$ID == ID][[1]]['mu']
+  sigma <- part_df$param[part_df$ID == ID][[1]]['sigma'] 
+  
+  #getting info from the last round
+  current_pair <- paste(pairs[pair,], collapse = "/")
+  last_round <- try(result_df[result_df$pair == current_pair & result_df$round_nr == n_round-1,], 
+                    silent = T) 
+  
+  if ((class(last_round)[1] == "try-error" | empty(last_round)) == FALSE){ #if the data isn't empty and there was no error reading it (e.g. if it was the very first round) - update the variable (this will almost always happen with the exception being the start of a round)
+    
+    a.op <- last_round$choice[last_round$ID != ID] #opponent last choice
+  
+    #update parameters based on opponnents previous choices 
+    variance <- variance_update(mu, variance, sigma) #?# peter: var det variance der skulle være først?
+    mu <- mu_update(mu, variance, a.op)
+    
+    #save new values of variance and mu
+    part_df$param[part_df$ID == ID][[1]]['variance'] <- variance
+    part_df$param[part_df$ID == ID][[1]]['mu'] <- mu
+  }
+  
+  
+  #calculate response
+  e_prop_a.op1 <- prop_a.op1(mu, variance, sigma) #estimated probability of opponent chosing 1 in prop
+  e_payoff_diff <- payoff_difference(e_prop_a.op1) #estimated payoff difference
+  prop_a.self1 <- softmax(e_payoff_diff, beta) #probability of self chosing 1
+  prop_a.self1
+  
+  choice <- rbinom(1, 1, prop_a.self1)
+  
+  
+  
+  return(choice)
+}
+```
+
+#Riccardo's code
+```{r RF code} 
+d<-d[complete.cases(d),]
+d$Left=as.numeric(d$Left)
+d$Handedness=1
+d$Handedness[d$Left==0]=-1
+d$Success=1
+d$Success[d$IndividualPayoff==0]=0
+d$Failure=0
+d$Failure[d$IndividualPayoff==0]=1
+d$X1=d$Handedness*d$Success
+d$X2=d$Handedness*d$Failure
+d$StayBias=c(NA,d$X1[1:(nrow(d)-1)])
+d$LeaveBias=-c(NA,d$X2[1:(nrow(d)-1)])
+
+WinStay <-
+  brm(
+    Left ~ 0 + StayBias + LeaveBias + (0 + StayBias + LeaveBias | Subject),
+    d,
+    family = bernoulli,
+    cores = 2,
+    chains = 2,
+    control = list(adapt_delta = 0.99, max_treedepth = 20),
+    iter = 3e3
+  )
 
 
 
+#Simulating values for beta (behavioral temperature)
+x=data.frame(V=rep(NA,100),B=rep(NA,100),p=rep(NA,100))
+n=1
+for (V in seq(from=0, to=1, by=0.1)){
+  for (B in seq(from=0, to=3, by=0.5)){
+    print(n)
+    x$B[n]=B
+    x$V[n]=V
+    x$p[n]=1 / (1+exp(-V/B))
+    n=n+1
+  }
+}
+ggplot(x, aes(V,p,group=B,color=B))+geom_smooth()
+
+
+```
 
 
 
