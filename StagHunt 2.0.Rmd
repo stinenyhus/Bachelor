@@ -1,0 +1,448 @@
+---
+title: "StagHunt 2.0"
+author: "Kenneth C. Enevoldsen"
+date: "10/29/2018"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+#Packages and WD
+```{r packages and wd}
+setwd("/Users/kennethenevoldsen/Desktop/Bachelor/Bachelor_code/Bachelor/")
+library(pacman)
+p_load(plyr, tidyverse, raster, reshape2, knitr, brms, boot, rethinking)
+```
+
+#Game board
+```{r  game board}
+#0: Dark space
+#1: Walkable space
+#2: Rabbit
+#3: Stag
+#4: Player 1 
+#5: Player 2
+
+  #creating the board
+map_grid <- c(0, 0, 2, 0, 0, rep(1, 5), 1, 0, 1, 0, 1, rep(1,5), 0, 0, 2, 0, 0)
+Stagmatrix <- matrix(data = map_grid, nrow = 5)
+
+#simple plot
+ # plot(raster(Stagmatrix))
+
+
+#trying it out with players and stag
+Stagmatrix[1,2] = 4
+Stagmatrix[3,2] = 3
+Stagmatrix[5,4] = 5
+
+x1=melt(t(Stagmatrix))
+names(x1)=c("x","y","color")
+
+  
+  #specifying the colors for the factors
+x1$color=factor(x1$color)
+levels(x1$color)=c("dark","walk", "rabbit", "stag", "player1", "player2")
+colours = c("dark" = "black", "walk" = "white",  "rabbit" = "red4", "stag" = "red", "player1" = "green", "player2" = "green4")
+
+  #plotting the board
+qplot(x, y, fill=color, data=x1, geom='tile') + scale_fill_manual(values = colours)
+```
+
+#Payoff matrix
+```{r Payoff matrix} 
+choice_mapping <- data_frame(stag = c(1), rabbit = c(0))
+
+pretty_p_matrix <- data_frame(x = c("stag", "rabbit"), stag = c("5,5", "3,0"), rabbit = c("0,3", "3,3"))
+pretty_p_matrix
+
+p_matrix <- data_frame(a1_choice = c(1, 0, 1, 0), 
+                       a2_choice = c(1, 1, 0, 0), 
+                       a1_reward = c(5, 3, 0, 3), 
+                       a2_reward = c(5, 0, 3, 3)) 
+p_matrix
+```
+
+#create_agents and match_up functions
+```{r create_agents and match_up}
+
+create_agents <- function(n_agents = 10, strategy, prop){
+  #INPUT
+    #n_agents: the desired number of agents
+    #n_rounds: the desired number of round
+    #strategy: a list of strategies given as a character vector
+      #implemented agent strategies
+          #NCB: Never cooperate (with a bias)
+          #CB: Always cooperate (with bias)
+          #RB: Random Bias, random choice with a bias
+          #WSLS: Win Stay Loose Switch (maybe not that relevant in this task?)
+          #SoftmaxTitTat: A tit for tat using a softmax function as well as an utility function
+          #k-ToM: a k-level theory of mind agent (e.g. k=0 => 0-ToM) 
+            #Note that you input the desired k-level in place of k, e.g. 1-ToM
+    #prop: a list of probabilities for the strategies (ordered)
+  #OUTPUT
+    #A dataframe of agents with the given strategies according to prop as well of the function which their strategies applies
+  
+  output <- data_frame(ID=seq(n_agents), 
+                      strategy=sample(strategy_list, n_agents, prob = prop_strategy, replace=TRUE))
+
+  output$strategy_function <- if_else(output$strategy
+                                      %in% c("NCB", "CB", "RB", "WSLS", "SoftmaxTitTat"),
+                                      output$strategy, "k-ToM") #All k-ToM's use the function k-ToM
+  output$strategy_function <- if_else(output$strategy_function
+                                      %in% c("NCB", "CB", "RB"),
+                                      "simple", output$strategy) #NCB, CB and RB use the function simple
+  return(output)
+}
+
+match_up <- function(agents_list, matchup_type){
+  #Generate pairs based on matchup_type given as a string
+  
+  #INPUT
+    #agents_list, a list of agents to be paired given as a character vector
+    #matchup_type given as a character string
+      #Possible choices
+        #Random: An agents is randomly matched up with another agents
+        #RR: Round robin matchup, each agent battles all other agents
+  #OUTPUT
+    #a matrix of the pairs
+  
+  if (matchup_type == "random"){ 
+    matrix(sample(agents_list, length(agents_list), replace=F), ncol = 2) #pairs the participants randomly
+  } else if (matchup_type == "RR"){
+    t(combn(agents_list, 2)) #create all possible pairs
+  } else {
+    stop("Please chose a valid matchup_type")
+  }
+}
+
+```
+
+#Prepare agent function
+```{r prepare} 
+prepare <- function(strategy_string){
+  if (strategy_string == "NCB"){
+    #very low prop. of choosing 1
+    params <- list(list("prop" = inv.logit(rnorm(1, mean = logit(0.1), sd = 0.1))))
+    
+  } else if (strategy_string == "CB") {
+    #very high prop. of choosing 1
+    params <- list(list("prop" = inv.logit(rnorm(1, mean = logit(0.9), sd = 0.1))))
+    
+  } else if (strategy_string == "RB") {
+    # prop. of approx. 50% of choosing 1
+    params <- list(list("prop" = inv.logit(rnorm(1, mean = logit(0.5), sd = 0.1))))
+    
+  } else if (strategy_string == "WSLS") {
+    params <- list(list("noise" = inv.logit(rnorm(1, mean = logit(0.1), sd = 0.1))))
+    
+  } else if (strategy_string == "SoftmaxTitTat") {
+    params <- list(list("bavioral_temp" = inv.logit(rnorm(1, mean = logit(0.5), sd = 0.2))))
+    
+  } else if (grepl("-ToM", strategy_string)) { #if the strategy is a k-ToM
+    k <- str_extract(strategy_string, "[0-9]")
+    if (k == 0){
+      
+    } else if (k > 1){
+      
+    } else {
+      stop("Please specify proper value for k")
+    }
+  } else {
+    stop("Could not find strategy, try to check for spelling errors")
+  }
+  
+
+  return(params)
+}
+```
+
+#Functions
+```{r functions} 
+#contains a mixture of functions used for strategies
+ 
+###_________________________ General _________________________###
+
+#utility function
+U <- function(a.self, a.op){ 
+  # takes two arguments
+  # a.self: choice of self
+  # a.op: choice of opponnent
+  # returns the point reward
+  x <- p_matrix$a1_reward[p_matrix$a1_choice == 1 & p_matrix$a2_choice == 1] #value if both choose 1
+  y <- p_matrix$a1_reward[p_matrix$a1_choice == 0 & p_matrix$a2_choice == 0] #value if self choose 0
+  
+  a.self*a.op*x + (1-a.self)*y #if both choose 1 you get 5 points and if you choose 0 you get 3 points
+}
+
+#Expected payoff
+payoff_difference <- function(prop_a.op1){
+  prop_a.op1*(U(1,1)-U(0,1))+(1-prop_a.op1)*(U(1,0)-U(0,0))
+}
+
+#softmax functions
+softmax <- function(e_payoff_diff, beta){ 
+  # Takes two arguments
+    # expected payoff difference
+    # a beta also called bahaivoural temperature - higher make the agent choice more random
+  # Returns probability self choosing 1
+  1/(1 + exp(-(e_payoff_diff/beta)))
+}
+
+
+
+###______________________ ToM specific _______________________###
+
+#Probability of opponnent a^op choosing 1
+prop_a.op1 <- function(mu, variance, sigma){
+  # takes in three arguments
+    # mu is approximate mean of 0-ToM posterior distribution
+    # variance is subjective uncertainty of the mean 
+    # sigma #?#
+  # returns probability of opponent choosing 1 
+  inv.logit(mu/sqrt(1+(variance+sigma)*3/pi^2))
+}
+
+mu_update <- function(mu, variance, a.op){
+  # takes 3 arguments
+    # mu from the round before
+    # variance form the round before
+    # a.op, which is the opponents choice last round
+  # returns an updated mu
+  mu + variance * (a.op - inv.logit(mu))
+}
+
+variance_update <- function(mu, variance, sigma) {
+  # takes 3 arguments
+    # mu from last round
+    # variance from last round
+    # sigma: higher values mean lower updating
+  #returns an updated variance
+  1 / (1 / (variance + sigma) + inv.logit(mu) * (1 - inv.logit(mu)))
+}
+
+```
+
+#Simple Agents functions
+```{r simple agents}
+simple <- function(ID, last_round, params = agents_df$params[agents_df$ID == ID]){
+  #Simple: Used for simple agents:
+    #RB: Random choice with a bias 
+    #CB: Cooperate with a bias
+    #NCB: Never cooperate with a bias
+  #INPUT
+    #ID: Not used (dummy variable for consistency)
+    #round_result: Not used (dummy variable for consistency)
+    #params: a list of 1 element, where the element is the prop of choosing 1 
+  #OUTPUT
+    #Choice: 0 or 1
+  
+  #randomly select rabbit or stag (with a slight bias)
+  rbinom(1, 1, prob = params[[1]]$prop)
+}
+
+WSLS <- function(ID, last_round, params = agents_df$params[agents_df$ID == ID]){ 
+  #WSLS: Win stay loose switch
+  #INPUT
+    #ID: the ID of the agent
+    #round_result: the result of the last round
+    #params: a list of 1 element: noise
+  #OUTPUT
+    #Choice: 0 or 1
+  noise <- params$WSLS$noise
+
+  if (class(last_round)[1] != "tbl_df"){ #initial round or missed trial
+    choice <- rbinom(1, 1, prob = 0.5)
+  } else {
+    choice <- last_round$choice[last_round$ID == ID]*last_round$choice[last_round$ID != ID]
+  }
+  
+  #add noise #?# RF: should this be a bias rather than noise?
+  choice <- rbinom(1, 1, prob = abs(choice - noise))
+  
+  return(choice)
+}
+
+SoftmaxTitTat <- function(ID, last_round, params = agents_df$params[agents_df$ID == ID]) {  
+  #SoftmaxTitTat: A Tit for tat agent using a softmax function
+  #INPUT
+    #ID: the ID of the agent
+    #round_result: the result of the last round
+    #params: a list of 1 element: the behaivioural temperature of the agent
+  #OUTPUT
+    #Choice: 0 or 1
+  
+  beta <- params$SoftmaxTitTat$bavioral_temp
+  
+  if (class(last_round)[1] != "tbl_df"){ #initial round or missed trial
+    #Start by assuming you opponent will COOP - will make the agents every likely to COOP
+    e_payoff_diff <- payoff_difference(1)
+    choice <- rbinom(1, 1, prob = softmax(e_payoff_diff, beta))
+  } else {
+  e_payoff_diff <- payoff_difference(last_round$choice[last_round$ID != ID])
+  choice <- rbinom(1, 1, prob = softmax(e_payoff_diff, beta))
+  }
+  
+  return(choice)
+}
+```
+
+#Reinforcement Learning #!# Not added
+```{r reinforcement Learning}
+#Not added
+```
+
+
+#k-ToM #!# WIP
+```{r k-ToM} 
+  #see Devaine, et al. (2017) https://doi.org/10.1371/journal.pcbi.1005833
+
+
+#k-ToM
+  #input original: x (hidden states, see inF.indlev), P (evolution params), u (inputs e.g. previous choice), inF (input structure - see prepape_kToM.m)
+  #output original: fx (updated hidden variables), indlevel (recursive states indexing see defIndlev.m)
+
+#input this script, ID
+
+level <- 1 # depth of recursive beliefs (k=level) #!# currently dummycoded k=1
+
+#metaweight (w=1) is currently assumed to be 1
+#diluteP is currently assumed to be 1 or 0 (whichever is the neutral element) - as we assume opponent params don't drift over time (correctly so in this case)
+
+if (level == 0){
+  print("not made yet") break
+} else {
+  #run k-ToM
+  #fetch stuff #needs stuff #!# add this
+  
+  ### 1) Update P(k'): agent's belief regarding opponent's level. k-ToM maintains parallel prediction P(c.op = 1|k') about opponents next more (c.op) depending on opponent's level (k')
+  
+  if (first_trial==T){ #if it is the first trial #!# dummycoded
+    Pk <- 1/level*rep(1, level)#max entropic belief about opponent's level e.g. probability of opponent having k-level is equal when no information is known (starts at k=0). Note: 1-ToM's opponent = 0-ToM 
+    if (level > 1){
+      print("not made yet") break
+    }
+    
+  } else { 
+    if (level > 1) { # k >= 2
+      print("not made yet") break
+    }
+  }  
+  ### 2) Update P(theta|k'), the agent's belief about her opponnent's params. (Note: that we do not assume the opponents beliefs to drift)
+    
+  ## 2.1) update E[theta|k'] & V[theta|k'] (opponents mu and variance)
+  for (j in 1:level){ # loop through the admissable levels of the opponent (k' = j-1) #?# maybe a more meaningful name than j?
+    j.Pk <- Pk[j]
+    #in.f   <-- not really sure here (get back to it - marked with ** on sheet)
+    if (first_trial==T){ #if it is the first trial #!# dummycoded
+      #don't update parameters
+      #!# add stuff here
+    } else { #VB-Laplace (variational bayes) update rule for k-ToM's belief 
+      #needed here: 
+        #Par_k: K-ToM's prior mean and variance on his opponent's params
+        #theta: k-ToM's assumed log-volatility of his opponent's params
+        #ot: k-ToM's opponents
+        #in: precalculated intermediary variable
+      #NB: VB update of opponent's params does not account for potential indentifiability issues between params (cf. mean-field assumption)
+      Pk = j.prop_k #synes det her er double trouble men der er sikkert en grund
+      prop_1.op <- inv.logit()#P(c.op = 1|k) 
+      V0 <- exp(Par_k(indV)) #prior variance
+      Vu <- 1/((1/V0)+Pk*prop_1.op*(1-prop_1.op))  #Posterior variance #eq. s4
+      E0 <- indMu
+      Eu <- E0 + Pk * Vu * (c.op-prop_1.op)    #posterior mean
+      #output results
+      indV <- log(Vu)
+      indMu <-  Eu
+    }
+  }
+      
+    
+}
+```
+
+#Compete function
+```{r compete}
+compete <- function(pair, n_rounds = 10){ 
+  #INPUT
+    #pair: a pair of participant to compete
+    #n_rounds: number of rounds
+  a1 <- pair[1]
+  a2 <- pair[2]
+  
+  round_result <- NA
+  
+  for (round in 1:n_rounds){
+      #calls the strategy function for each agent and gives it the ID (a1/a2) as a argument 
+    a1_choice <- do.call(agents_df$strategy_function[agents_df$ID == a1], 
+                         args = list(ID = a1, 
+                                     last_round = round_result))
+    a2_choice <- do.call(agents_df$strategy_function[agents_df$ID == a2], 
+                           args = list(ID = a2, 
+                                       last_round = round_result))
+      
+      #generate result
+    result <- p_matrix[p_matrix$a1_choice == a1_choice & p_matrix$a2_choice == a2_choice,]
+        
+      #save results    
+    round_result <- data_frame(ID = c(a1, a2),  
+                               choice = c(a1_choice, a2_choice),
+                               points = c(result$a1_reward, result$a2_reward), 
+                               round_nr = round,
+                               strategy = c(agents_df$strategy[agents_df$ID == a1],
+                                            agents_df$strategy[agents_df$ID == a2]),
+                               pair = paste(a1, a2, sep = "/"))
+    if (round == 1){
+      result_df <- round_result
+    } else {
+      result_df <- rbind(result_df, round_result)
+    }
+  }
+  return(result_df)
+}
+```
+
+#Running all the things
+```{r simulation}  
+  #Create agents
+#The following list is meant as inputs for create_agents()
+strategy_list <- c("NCB",  "CB",  "RB", "WSLS", "SoftmaxTitTat", "0-ToM", "1-ToM",  "2-ToM")
+prop_strategy <- c(  0.0,   0.0,   0.0,    0.5,             0.5,     0.0,     0.0,      0.0)
+
+agents_df <- create_agents(n_agents = 10, 
+              strategy = strategy_list, 
+              prop = prop_strategy)
+
+  #creating pairs
+pairs <- match_up(agents_list = agents_df$ID, matchup_type = "random")
+
+  #preparing agents
+agents_df$params <- sapply(agents_df$strategy, prepare)
+
+  #make the agents compete in the staghunt
+result_list <- apply(pairs, 1, compete, n_rounds = 30) #using apply to apply compete() to pairs and adding n_rounds as an argument to compete()
+
+  #bind the resulting dataframe by row
+result_df <- result_list %>% bind_rows()
+
+  #inspecting results
+head(result_df, 20)
+
+  #summing up the point for each partipant
+sum_result <- result_df %>% 
+  dplyr::group_by(ID, strategy) %>% 
+  dplyr::summarise(total_points = sum(points)) 
+sum_result
+```
+
+
+
+
+
+
+
+
+
+
+
+
+

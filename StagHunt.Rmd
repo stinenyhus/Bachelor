@@ -8,10 +8,27 @@ editor_options:
 ---
 
 To do:
+do a simulation of good sigma values (see RF simulation code)
 add equation number
+make an always coop and never coop 
+
+
+To do optionally:
+Make a prepare agents function (prepares all the variables for the agent in the beginning)
 make the competition into a vector operation
   apply(pairs, 1, sum) #simple example
-  apply(pairs, 1, staghunt) #simple example
+  apply(pairs, 1, staghunt_compete) 
+make it into a single function
+make more reasonable variable names (eg. a.op -> choice_op eller c.op eller måske c1.op)
+part_df should be agents_df
+make some kind of extended DF for all states of the participants
+
+ 
+General outline:
+-create desired agents (DONE)
+-prepare agents (create initial variable, biases etc.) (make a function which prepares based on strategy)
+-pair up agents (DONE)
+-make agents compete (make a staghunt_compete function, and make it work with apply)
 
 
 #Packages and WD
@@ -19,6 +36,13 @@ make the competition into a vector operation
 setwd("/Users/kennethenevoldsen/Desktop/Bachelor/Bachelor_code/Bachelor/")
 library(pacman)
 p_load(plyr, tidyverse, raster, reshape2, knitr, brms, boot, rethinking)
+```
+
+#Example test data #!# temporary
+```{r Example data}
+#data for intended for testing
+test_df <- result_df
+
 ```
 
 #Game board
@@ -133,34 +157,36 @@ variance_update <- function(mu, variance, sigma) {
 
 ```
 
-#Strategies
-```{r Strategies} 
+#Strategies (old, but working)
+```{r Strategies}
 
 ###______________________ Simple agents ______________________###
 
 #random choice
-random_choice <- function(ID){
+random_choice <- function(ID){ #!# not tested
   if (is.na(part_df$param[part_df$ID == ID])){ 
     #generates individual differences (personal biases)
-    part_df$param[part_df$ID == ID] <-  list(c(prop = inv.logit(rnorm(1, mean = 0, sd = 0.1)))) #?# er den her fin? (skal der ikke være en SD?)
+    part_df$param[part_df$ID == ID] <-  list(c(prop = inv.logit(rnorm(1, mean = logit(0.5), sd = 0.1)))) #?# er den her fin? (skal der ikke være en SD?)
   }
-  
+
   #randomly select rabbit or stag
   choice <- rbinom(1, 1, prob = part_df$param[part_df$ID == ID][[1]]['prop']) 
   return(choice)
 }
 
 #Win stay loose switch - should capture both nash, however this does not differentiate between reward
-WSLS <- function(ID){ #!# not tested
+WSLS <- function(ID){  
   if (is.na(part_df$param[part_df$ID == ID])){ 
     #generates individual differences (personal biases)
-    part_df$param[part_df$ID == ID] <-  list(c(noise = rnorm(1, mean = .10, sd = 0.1)))
+    part_df$param[part_df$ID == ID] <-  list(c(noise = 
+                                                 inv.logit(rnorm(1, mean = logit(0.1), sd = 0.1))))
   }
   
   current_pair <-  paste(pairs[pair,], collapse = "/")
-  last_round <- result_df[result_df$pair == current_pair & result_df$round_nr == n_round-1,]
-
-  if (empty(last_round)){ #if there was no last round then select randomly
+  last_round <- try(result_df[result_df$pair == current_pair & result_df$round_nr == n_round-1,], 
+                    silent = T)
+  
+  if (class(last_round)[1] == "try-error" | empty(last_round)){ #if there was no last round then select randomly
     choice <- rbinom(1, 1, prob = 0.5)
   } else { #else WSLS
     choice <- last_round$choice[last_round$ID == ID]*last_round$choice[last_round$ID != ID]
@@ -174,6 +200,7 @@ WSLS <- function(ID){ #!# not tested
 }
 
 #Tit for Tat - If you COOP I will COOP - this differentiate between reward and is more likely to priotize COOP if it given positive results
+#?# does this one make sense?
 SoftmaxTitTat <- function(ID) { #!# not tested 
   
   if (is.na(part_df$param[part_df$ID == ID])){ 
@@ -183,10 +210,11 @@ SoftmaxTitTat <- function(ID) { #!# not tested
   
   beta <- part_df$param[part_df$ID == ID][[1]]['bavioral_temp']
   
-  current_pair <-  paste(pairs[pair,], collapse = "/")
-  last_round <- result_df[result_df$pair == current_pair & result_df$round_nr == n_round-1,]
-
-  if (empty(last_round)) { #if there was no last round then select randomly based upon expected payoff
+  current_pair <- paste(pairs[pair,], collapse = "/")
+  last_round <- try(result_df[result_df$pair == current_pair & result_df$round_nr == n_round-1,], 
+                    silent = T)
+  
+  if (class(last_round)[1] == "try-error" | empty(last_round)) { #if there was no last round then select randomly based upon expected payoff
     e_payoff_diff <- payoff_difference(beta)
     choice <- rbinom(1, 1, prob = softmax(e_payoff_diff, beta)) #!# the beta should change based on individual
   } else {
@@ -199,47 +227,81 @@ SoftmaxTitTat <- function(ID) { #!# not tested
 
 ###_______________Reinforcement learning agents_______________###
 
-#Reinforcement learning #?#Should I use Monte Carlo Method or Q-learning? (se slides on reinforcemnt)
+#Reinforcement learning #?# Should I use Monte Carlo Method or Q-learning? (se slides on reinforcemnt)
 
 ###________________________ ToM agents _______________________###
-  
+
   #see Devaine, et al. (2017) https://doi.org/10.1371/journal.pcbi.1005833
 
 #k=0
-ToM0 <- function(a.op, beta, sigma, mu, variance){
-  #update parameters based on previous choices 
-  variance <- variance_update(mu, variance, sigma) #!# make this into an update variable (måske)
-  mu <- mu_update(mu, variance, a.op)
+ToM0 <- function(ID){ 
+  if (is.na(part_df$param[part_df$ID == ID])){ 
+    #generates individual differences / starting point
+    part_df$param[part_df$ID == ID] <- list(c(bavioral_temp = rnorm(1, mean = .5, sd = 0.2), 
+                                              variance = rnorm(1, mean = 1.5, sd = 0.3),
+                                              mu = rnorm(1, mean = 0.5, sd = 0.2), #this is in logodds #!# set it up so people are slightly more likely to COOP
+                                              sigma = inv.logit(rnorm(1, mean = logit(0.3), sd = 0.2)) 
+                                              ))
+
+  }
+  #fetching info from the participant with the corresponding ID
+  beta <- part_df$param[part_df$ID == ID][[1]]['bavioral_temp']
+  variance <- part_df$param[part_df$ID == ID][[1]]['variance']
+  mu <- part_df$param[part_df$ID == ID][[1]]['mu']
+  sigma <- part_df$param[part_df$ID == ID][[1]]['sigma'] 
+  
+  #getting info from the last round
+  current_pair <- paste(pairs[pair,], collapse = "/")
+  last_round <- try(result_df[result_df$pair == current_pair & result_df$round_nr == n_round-1,], 
+                    silent = T) 
+  
+  if ((class(last_round)[1] == "try-error" | empty(last_round)) == FALSE){ #if the data isn't empty and there was no error reading it (e.g. if it was the very first round) - update the variable (this will almost always happen with the exception being the start of a round)
+    
+    a.op <- last_round$choice[last_round$ID != ID] #opponent last choice
+  
+    #update parameters based on opponnents previous choices 
+    variance <- variance_update(mu, variance, sigma) #?# peter: var det variance der skulle være først?
+    mu <- mu_update(mu, variance, a.op)
+    
+    #save new values of variance and mu
+    part_df$param[part_df$ID == ID][[1]]['variance'] <- variance
+    part_df$param[part_df$ID == ID][[1]]['mu'] <- mu
+  }
   
   
+  #calculate response
   e_prop_a.op1 <- prop_a.op1(mu, variance, sigma) #estimated probability of opponent chosing 1 in prop
   e_payoff_diff <- payoff_difference(e_prop_a.op1) #estimated payoff difference
   prop_a.self1 <- softmax(e_payoff_diff, beta) #probability of self chosing 1
+  prop_a.self1
+  
+  choice <- rbinom(1, 1, prop_a.self1)
+  
+  
   
   return(choice)
 }
 
-#kig på hvordan du laver disse:
-#1st
-  #tjek her
-#3rd
-
-#5th
-
-
 ```
 
+#prepare agents #!# WIP
+```{r}
+#here I will create the prepare agents function
+```
+
+
+
 #Creating participants and setting number of rounds and participant
-```{r Creating part and setting variables}
+```{r Creating part and setting variables} 
  #number of participants
 n_p <- 10
 
   #percentage of strategies in participants
-strategy_list <- c("random_choice", "WSLS1", "WSLS2")
-strategy_prop <- c(1.0, 0.0, 0.0)
+strategy_list <- c("random_choice", "WSLS", "SoftmaxTitTat", "ToM0")
+strategy_prop <- c(0.0, 0.0, 1.0, 0.0)
 
 #number of round
-n_rounds <- 10
+n_rounds <- 30
 
 #Matchup type
 matchup_type = "random"
@@ -251,6 +313,45 @@ part_df <- data_frame(ID=seq(n_p),
 part_df$strategy <- as.character(part_df$strategy)
 
 ```
+
+
+#the apply stuff - not working yet
+```{r} 
+#define a function for the competion
+staghunt <- function(pair, n_rounds){
+  #takes two arguments, a matrix of pairs and a number of rounds
+
+  for (n_round in 1:n_rounds){
+        #generate choice
+      p1_choice <- do.call(part_df$strategy[part_df$ID == pairs[pair,1]],
+                           args = list(pairs[pair,1]))#calls the strategy the players uses (fetched in part_df)
+      p2_choice <- do.call(part_df$strategy[part_df$ID == pairs[pair,2]],
+                           args = list(ID = pairs[pair,2]))
+
+        #generate result
+      result <- p_matrix[p_matrix$p1_choice == p1_choice & p_matrix$p2_choice == p2_choice,]
+
+      #save results
+      round_result <- data_frame(ID = pairs[pair,],
+                                 choice = c(p1_choice, p2_choice),
+                                 points = c(result$p1_reward, result$p2_reward),
+                                 round_nr = n_round,
+                                 strategy = c(part_df$strategy[part_df$ID == pairs[pair,1]],
+                                              part_df$strategy[part_df$ID == pairs[pair,2]]),
+                                 pair = paste(pairs[pair,], collapse = "/")
+                                 )
+
+      if (n_round == 1 & pair == 1){
+        result_df <- round_result
+      } else {
+        result_df <- rbind(result_df, round_result)
+      }
+    }
+
+}
+apply(pairs, 1, function(x) print(paste(x, collapse = "/")))
+```
+
 
 #Battle royale
 ```{r Battle royale}
@@ -267,8 +368,9 @@ if (matchup_type == "random"){
 }
 
 
+#reset result_df
+try(rm(result_df), silent = T)
 
-apply(pairs, 1, staghunt)
 
 #looping through the pairs making them compete for multiple rounds 
 for (pair in 1:nrow(pairs)){
@@ -343,6 +445,24 @@ WinStay <-
     control = list(adapt_delta = 0.99, max_treedepth = 20),
     iter = 3e3
   )
+
+
+
+#Simulating values for beta (behavioral temperature)
+x=data.frame(V=rep(NA,100),B=rep(NA,100),p=rep(NA,100))
+n=1
+for (V in seq(from=0, to=1, by=0.1)){
+  for (B in seq(from=0, to=3, by=0.5)){
+    print(n)
+    x$B[n]=B
+    x$V[n]=V
+    x$p[n]=1 / (1+exp(-V/B))
+    n=n+1
+  }
+}
+ggplot(x, aes(V,p,group=B,color=B))+geom_smooth()
+
+
 ```
 
 
