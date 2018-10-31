@@ -157,6 +157,7 @@ prepare <- function(strategy_string){
 ```
 
 ```{r}
+<<<<<<< HEAD
 
 ###_______ Help functions  _______###
 
@@ -173,11 +174,14 @@ sizeXrec <- function(i, P){
 
 ###_______ The actual function _______###
 
+=======
+>>>>>>> 052c9fcde4fe0ea23574e282a8ed9a8982914cfe
 prepare_kToM <- function(k){
   #INPUT
     #Sofistication level
   #OUTPUT
     #Params: a list of all starting parameters of the agents
+<<<<<<< HEAD
   #NOTE:
     #This code is a translation of the matlab code: prepare_kToM.m and prepare_agents.m
     #see Devaine, et al. (2017) https://doi.org/10.1371/journal.pcbi.1005833
@@ -230,11 +234,24 @@ prepare_kToM <- function(k){
   #%#         options.inG = inG;
   
   prior_mu <- list()
+=======
+  
+  theta = -2 #-log(2); % (log-) prior volatility 
+  phi = c(-1, 0) # (log-) behavioral temperature and bias
+  n_obs_par = 2 #Number of observation parameters
+  n_evo_par = 1 #Number of evolution parameters
+  n_tot_par = n_obs_par + n_evo_par #Total number og parameters
+>>>>>>> 052c9fcde4fe0ea23574e282a8ed9a8982914cfe
   
   if (k>0){
     for (i in 1:k){
       # % prior (log-) volatility = -1 (opponent = efficient learner)
+<<<<<<< HEAD
       prior_mu$ind_level[i] = 0
+=======
+      #   indVol = inG.indlev(j).Par(1); % index of hidden-state encoding E[invsigm volatility]
+      #   options.priors.muX0(indVol) = 0;%-1;
+>>>>>>> 052c9fcde4fe0ea23574e282a8ed9a8982914cfe
       #   % "forgetting" of opponent's sophistication
       #   if inF.diluteP==1
       #       indDil = inG.indlev(j).Par(3); % index of hidden-state encoding E[invsigm dilut. coef.]
@@ -406,7 +423,11 @@ k-ToM <- function(ID, last_round, params = agents_df$params[agents_df$ID == ID])
   
 }
 
+<<<<<<< HEAD
   #NOTE: The following is a translation of recToMfunction.m
+=======
+  
+>>>>>>> 052c9fcde4fe0ea23574e282a8ed9a8982914cfe
   
 #k-ToM
   #input original: x (hidden states, see inF.indlev), P (evolution params), u (inputs e.g. previous choice), inF (input structure - see prepape_kToM.m)
