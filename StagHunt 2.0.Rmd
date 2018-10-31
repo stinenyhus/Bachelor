@@ -124,7 +124,7 @@ match_up <- function(agents_list, matchup_type){
 ```
 
 #Prepare agent function
-```{r prepare} 
+```{r prepare}  
 prepare <- function(strategy_string){
   if (strategy_string == "NCB"){
     #very low prop. of choosing 1
@@ -146,13 +146,7 @@ prepare <- function(strategy_string){
     
   } else if (grepl("-ToM", strategy_string)) { #if the strategy is a k-ToM
     k <- str_extract(strategy_string, "[0-9]")
-    if (k == 0){
-      
-    } else if (k > 1){
-      
-    } else {
-      stop("Please specify proper value for k")
-    }
+    params = prepare_kToM(k)
   } else {
     stop("Could not find strategy, try to check for spelling errors")
   }
@@ -162,8 +156,109 @@ prepare <- function(strategy_string){
 }
 ```
 
+```{r}
+
+###_______ Help functions  _______###
+
+sizeXrec <- function(i, P){
+  #Returns the number of k-ToM hidden states
+    #Note from source: Marie Devaine wrote this in November 2015
+  #INPUT
+    #i: k-ToM's sophistication level
+    #n_tot_par: total nb of evol/obs params
+  #OUTPUT
+    #n_x: number of k-ToM's hidden sates
+  
+}
+
+###_______ The actual function _______###
+
+prepare_kToM <- function(k){
+  #INPUT
+    #Sofistication level
+  #OUTPUT
+    #Params: a list of all starting parameters of the agents
+  #NOTE:
+    #This code is a translation of the matlab code: prepare_kToM.m and prepare_agents.m
+    #see Devaine, et al. (2017) https://doi.org/10.1371/journal.pcbi.1005833
+    # #%# signifies not implented og currently implementing
+  
+  
+  
+  theta = -2 #-log(2); % (log-) prior volatility 
+  #%#       [options,dim] = prepare_kToM(K,game,role,0);
+  #%#       f = @f_kToM;
+  #%#       g = @g_kToM;
+  phi = c(-1, 0) # (log-) behavioral temperature and bias
+  #%#       inF = options.inF;
+  #%#       inG = options.inG;
+  #%#       x0 = options.priors.muX0;
+  #%#       inF.dummyPar = [1;0;0]
+  n_obs_par = 2 #Number of observation parameters
+  n_evo_par = 1 #Number of evolution parameters
+  n_tot_par = n_obs_par + n_evo_par #Total number og parameters #KCE: can just be 3
+  
+  #%#         inG = inF; #?# RF, what is this exactly?
+  #%#         inG.indlev = defIndlev(K,NtotPar); % states' indexing
+  #defIndlev.m:
+  ind_level <- list() #individual levels
+    #Note: if k == 0 this list is empty as 0-ToM oppononent has no individual levels
+  if (k > 0){
+    for (i in 1:k){
+      ind_level$op_k[i]=i-1
+      
+      #sizeXi = sizeXrec(i-1,NtotPar)
+      #sizeXrec.m
+        #Number of hidden states (x)
+      if (i-1 == 0){ #e.g. if the opponent is a 1-ToM
+        n_x = 2 #number of hidden states (x)
+      } else {
+        
+      }
+      
+      
+      
+      
+      
+    }
+    
+  }
+  
+  
+  #%#         inG.npara = NtotPar;
+  #%#         options.inF = inF;
+  #%#         options.inG = inG;
+  
+  prior_mu <- list()
+  
+  if (k>0){
+    for (i in 1:k){
+      # % prior (log-) volatility = -1 (opponent = efficient learner)
+      prior_mu$ind_level[i] = 0
+      #   % "forgetting" of opponent's sophistication
+      #   if inF.diluteP==1
+      #       indDil = inG.indlev(j).Par(3); % index of hidden-state encoding E[invsigm dilut. coef.]
+      #       options.priors.muX0(indDil) = -2;
+      #   end
+      #   % behavioural temperature = -1 (opponent = exploitative decider)
+      #   indTemp = inG.indlev(j).Par(2*inF.indParev+1); % index of hidden-state encoding E[log temp]
+      #   options.priors.muX0(indTemp) = 0;%-1;
+    }
+    
+  }
+  
+  
+  
+  
+  params <- list(list())
+  
+  return(params)
+}
+```
+
+
 #Functions
-```{r functions} 
+```{r functions}  
 #contains a mixture of functions used for strategies
  
 ###_________________________ General _________________________###
@@ -229,7 +324,7 @@ variance_update <- function(mu, variance, sigma) {
 ```
 
 #Simple Agents functions
-```{r simple agents}
+```{r simple agents} 
 simple <- function(ID, last_round, params = agents_df$params[agents_df$ID == ID]){
   #Simple: Used for simple agents:
     #RB: Random choice with a bias 
@@ -246,7 +341,7 @@ simple <- function(ID, last_round, params = agents_df$params[agents_df$ID == ID]
   rbinom(1, 1, prob = params[[1]]$prop)
 }
 
-WSLS <- function(ID, last_round, params = agents_df$params[agents_df$ID == ID]){ 
+WSLS <- function(ID, last_round, params = agents_df$params[agents_df$ID == ID]){  
   #WSLS: Win stay loose switch
   #INPUT
     #ID: the ID of the agent
@@ -302,6 +397,17 @@ SoftmaxTitTat <- function(ID, last_round, params = agents_df$params[agents_df$ID
   #see Devaine, et al. (2017) https://doi.org/10.1371/journal.pcbi.1005833
 
 
+
+k-ToM <- function(ID, last_round, params = agents_df$params[agents_df$ID == ID]){
+  strategy_string <- agents_df$strategy[agents_df$ID == ID]
+  k <- str_extract(strategy_string, "[0-9]") #agents sofistication level
+
+  
+  
+}
+
+  #NOTE: The following is a translation of recToMfunction.m
+  
 #k-ToM
   #input original: x (hidden states, see inF.indlev), P (evolution params), u (inputs e.g. previous choice), inF (input structure - see prepape_kToM.m)
   #output original: fx (updated hidden variables), indlevel (recursive states indexing see defIndlev.m)
@@ -451,7 +557,6 @@ write_csv(sum_result, path = "result_df.csv")
 ```{r 0-ToM}
 
 ###________________________ ToM agents _______________________###
-<<<<<<< HEAD
 
   #see Devaine, et al. (2017) https://doi.org/10.1371/journal.pcbi.1005833
 
@@ -546,109 +651,10 @@ for (V in seq(from=0, to=1, by=0.1)){
   }
 }
 ggplot(x, aes(V,p,group=B,color=B))+geom_smooth()
-=======
->>>>>>> cfc830663aaec1a484829fe1f23faaa5c68c67bc
-
-  #see Devaine, et al. (2017) https://doi.org/10.1371/journal.pcbi.1005833
-
-<<<<<<< HEAD
-```
-=======
-#k=0
-ToM0 <- function(ID){ 
-  if (is.na(part_df$param[part_df$ID == ID])){ 
-    #generates individual differences / starting point
-    part_df$param[part_df$ID == ID] <- list(c(bavioral_temp = rnorm(1, mean = .5, sd = 0.2), 
-                                              variance = rnorm(1, mean = 1.5, sd = 0.3),
-                                              mu = rnorm(1, mean = 0.5, sd = 0.2), #this is in logodds #!# set it up so people are slightly more likely to COOP
-                                              sigma = inv.logit(rnorm(1, mean = logit(0.3), sd = 0.2)) 
-                                              ))
->>>>>>> cfc830663aaec1a484829fe1f23faaa5c68c67bc
-
-  }
-  #fetching info from the participant with the corresponding ID
-  beta <- part_df$param[part_df$ID == ID][[1]]['bavioral_temp']
-  variance <- part_df$param[part_df$ID == ID][[1]]['variance']
-  mu <- part_df$param[part_df$ID == ID][[1]]['mu']
-  sigma <- part_df$param[part_df$ID == ID][[1]]['sigma'] 
-  
-  #getting info from the last round
-  current_pair <- paste(pairs[pair,], collapse = "/")
-  last_round <- try(result_df[result_df$pair == current_pair & result_df$round_nr == n_round-1,], 
-                    silent = T) 
-  
-  if ((class(last_round)[1] == "try-error" | empty(last_round)) == FALSE){ #if the data isn't empty and there was no error reading it (e.g. if it was the very first round) - update the variable (this will almost always happen with the exception being the start of a round)
-    
-    a.op <- last_round$choice[last_round$ID != ID] #opponent last choice
-  
-    #update parameters based on opponnents previous choices 
-    variance <- variance_update(mu, variance, sigma) #?# peter: var det variance der skulle være først?
-    mu <- mu_update(mu, variance, a.op)
-    
-    #save new values of variance and mu
-    part_df$param[part_df$ID == ID][[1]]['variance'] <- variance
-    part_df$param[part_df$ID == ID][[1]]['mu'] <- mu
-  }
-  
-  
-  #calculate response
-  e_prop_a.op1 <- prop_a.op1(mu, variance, sigma) #estimated probability of opponent chosing 1 in prop
-  e_payoff_diff <- payoff_difference(e_prop_a.op1) #estimated payoff difference
-  prop_a.self1 <- softmax(e_payoff_diff, beta) #probability of self chosing 1
-  prop_a.self1
-  
-  choice <- rbinom(1, 1, prop_a.self1)
-  
-  
-  
-  return(choice)
-}
-```
-
-#Riccardo's code
-```{r RF code} 
-d<-d[complete.cases(d),]
-d$Left=as.numeric(d$Left)
-d$Handedness=1
-d$Handedness[d$Left==0]=-1
-d$Success=1
-d$Success[d$IndividualPayoff==0]=0
-d$Failure=0
-d$Failure[d$IndividualPayoff==0]=1
-d$X1=d$Handedness*d$Success
-d$X2=d$Handedness*d$Failure
-d$StayBias=c(NA,d$X1[1:(nrow(d)-1)])
-d$LeaveBias=-c(NA,d$X2[1:(nrow(d)-1)])
-
-WinStay <-
-  brm(
-    Left ~ 0 + StayBias + LeaveBias + (0 + StayBias + LeaveBias | Subject),
-    d,
-    family = bernoulli,
-    cores = 2,
-    chains = 2,
-    control = list(adapt_delta = 0.99, max_treedepth = 20),
-    iter = 3e3
-  )
-
-
-
-#Simulating values for beta (behavioral temperature)
-x=data.frame(V=rep(NA,100),B=rep(NA,100),p=rep(NA,100))
-n=1
-for (V in seq(from=0, to=1, by=0.1)){
-  for (B in seq(from=0, to=3, by=0.5)){
-    print(n)
-    x$B[n]=B
-    x$V[n]=V
-    x$p[n]=1 / (1+exp(-V/B))
-    n=n+1
-  }
-}
-ggplot(x, aes(V,p,group=B,color=B))+geom_smooth()
 
 
 ```
+
 
 
 
