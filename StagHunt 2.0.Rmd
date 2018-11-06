@@ -202,7 +202,7 @@ softmax <- function(e_payoff_diff, beta){
 ###______________________ ToM specific _______________________###
 
 #Probability of opponnent a^op choosing 1
-p_op_1 <- function(mu, variance, sigma){
+p_op_1_fun <- function(mu, variance, sigma){
   # takes in three arguments
     # mu is approximate mean of 0-ToM posterior distribution
     # variance is subjective uncertainty of the mean 
@@ -300,14 +300,15 @@ SoftmaxTitTat <- function(ID, last_round, params = agents_df$params[agents_df$ID
 #Not added
 ```
 
-#k-ToM #!# WIP
+#k-ToM - placeholder
 ```{r k-ToM}  
 ##CURENTLY AT THE BUTTON OF THE CODE 
 ```
 
 #Compete function
 ```{r compete}
-compete <- function(pair, n_rounds = 10){  
+
+compete <- function(pair, n_rounds = 10){   
   #INPUT
     #pair: a pair of participant to compete
     #n_rounds: number of rounds
@@ -386,7 +387,224 @@ write_csv(sum_result, path = "result_df.csv")
 ```
 
 
+### ___ K-tom testcode ___ ###
+```{r}
+prepare_kToM <- function(k){
+  behavioral_temp = inv.logit(rnorm(1, mean = logit(.5), sd = 0.2))#?# what is the values in the matlab code?
+  sigma = inv.logit(rnorm(1, mean = logit(0.3), sd = 0.2)) #?# what is the values in the matlab code?
+  
+  if (k == 0){
+    variance = rnorm(1, mean = 1.5, sd = 0.2) #?# what is the values in the matlab code?
+    mu = inv.logit(rnorm(1, mean = logit(0.5), sd = 0.2))
+    
+    params <- list(behavioral_temp = behavioral_temp, 
+                 variance = variance, 
+                 mu = mu, 
+                 sigma = sigma, 
+                 k = k)
+    
+  } else if (k > 0){
+    p_k <- rep(1/k, k) #probabilty for each possible sophistication level of the opponent 
+                       #(note: 1-ToM's opponent == 0-ToM, e.g. p_k = 1) 
+    mu <- rep(0.5, k) #equal chance of choosing both strategies (naive starting point)
+    variance <- rnorm(k, mean = 1.5, sd = 0.2) #!# temporary - should be extracted from matlab 
+    
+      params <- list(behavioral_temp = behavioral_temp, 
+                 variance = variance, 
+                 mu = mu, 
+                 sigma = sigma,
+                 p_k = p_k, 
+                 k = k)
+  }
+  params <- list(params)
+  return(params)
+}
+
+update_pk <- function(p_k, choice_op, p_op_1){
+  #eq. S4 p. ix (9) in Devaine, et al. (2017) appendix
+  #calculates P(k)
+  p_k <- choice_op* #if opponent choose 1
+    ((p_k*p_op_1)/sum(p_k*p_op_1)) + 
+    (1-choice_op)* #if opponent choose 0
+    (p_k*(1-p_op_1)/sum(p_k*(1-p_op_1))) 
+  
+  return(p_k)
+}
+
+p_op_1_k_fun <- function(mu, variance){
+  #INPUT
+    #takes a mu and a variance (of opponent)
+  #OUTPUT
+    #p_op_1_k probability of opponent choosing 1 given k, e.g. P(c_op = 1|k') in loggodds
+  
+  #this calculation uses a semi-analytical approximation by Daunizeau, J. (2017)
+  
+  #constants
+  a <- 0.205
+  b <- -0.319
+  c <- 0.781
+  d <- 0.870
+  
+  #calculation
+  tmp <- (mu + b * variance^c) / sqrt(1 + a * variance^d)
+  p_op_1_k <- log(inv_logit(tmp))
+  
+  return(p_op_1_k)
+}
+
+k_ToM <- function(ID, last_round, params = agents_df$params[agents_df$ID == ID]){
+    #k-ToM; A Theory of Mind agent in which the agent sophistication level is k
+  #INPUT
+    #ID: the ID of the agent
+    #round_result: the result of the last round
+    #params: a list of X element: ... #!# fill here
+  #OUTPUT
+    #Choice: 0 or 1
+  print(ID)
+  
+  ###_____ FETCH VARIABLES _____###
+  
+  if (class(last_round)[1] == "tbl_df"){ #if not first round
+    choice_self <- last_round$choice[last_round$ID == ID]
+    choice_op <- last_round$choice[last_round$ID != ID]
+  }
+  
+  k <- params[[1]]$k
+  beta <- params[[1]]$behavioral_temp
+  variance <- params[[1]]$variance
+  mu <- params[[1]]$mu
+  
+  if (k == 0){ #0-ToM
+    sigma <- params[[1]]$sigma #!# no sigma for k-ToM, k > 0?
+  } else { #k > 0
+    if (class(last_round)[1] != "tbl_df"){#if it is the first round...
+      p_op_1_k_logodds <- p_op_1_k_fun(mu, variance)  #calculate P(c_op|k')
+      p_op_1_k <- inv_logit(p_op_1_k_logodds)
+    } else { #else fetch it
+      p_op_1_k <- params[[1]]$p_op_1_k
+    }
+    p_k <- params[[1]]$p_k
+  }
+  
+  ###_____ UPDATE BELIEFS _____###
+  if (class(last_round)[1] == "tbl_df"){ #not first roundfirst round
+    if (k == 0){ #0-ToM
+      variance <- variance_update(mu, variance, sigma) 
+      mu <- mu_update(mu, variance, choice_op)
+    } else { #k > 0
+      #!# vi skal lige være helt sikre på rækkefølgen af udregningerne
+      #!# vi skal være helt sikre på hvad W/df gør (pt. er det antaget at være et neutral element)
+      mu <- mu + p_k * variance * (choice_op - p_op_1_k) #posterior mean (mu)
+      variance <- 1 / (1 / variance) + p_k * p_op_1_k * (1 - p_op_1_k) #posterior variance 
+      p_k <- update_pk(p_k, choice_op, p_op_1_k) #P(k'), prob. of o. having sophistication level k'
+      p_op_1_k_logodds <- p_op_1_k_fun(mu, variance) #P(c_op = 1 | k'), prob. of op. choosing 1 given sophistication level, k' (in logodds)
+      p_op_1_k <- inv_logit(p_op_1_k_logodds) #!# should this always be in % 
+    }
+  }
+  
+  ###_____ SAVE PARAMS _____###
+    #<<- means assign to the global variabel (similar to af assign())
+  agents_df$params[agents_df$ID == ID][[1]]$variance <<- variance
+  agents_df$params[agents_df$ID == ID][[1]]$mu <<- mu
+  
+  if (k > 0){
+    agents_df$params[agents_df$ID == ID][[1]]$p_k <<- p_k
+    agents_df$params[agents_df$ID == ID][[1]]$p_op_1_k <<- p_op_1_k
+    print("it did it")#for testing
+  }
+  
+  ###_____ CALCULATE RESPONSE _____###
+  if (k == 0){ #0-ToM
+    p_op_1 <- p_op_1_fun(mu, variance, sigma) #estimated probability of opponent chosing 1 in %
+  } else { #k > 0
+    p_op_1 <- p_k*p_op_1_k #the probality of k multiplied by the probality of chosing one given k  
+  }
+  
+  e_payoff_diff <- payoff_difference(p_op_1) #estimated payoff difference
+  p_self_1 <- softmax(e_payoff_diff, beta) #probability of self chosing 1
+  choice <- rbinom(1, 1, p_self_1)
+
+  return(choice)
+}
+
+```
+
+#testing code
+```{r} 
+agents_df <- data_frame(ID = seq(4), 
+                        strategy = c("1-ToM", "3-ToM", "2-ToM", "3-ToM"),
+                        strategy_function = rep("k_ToM", 4),
+                        params = NA
+                        )
+agents_df
+
+agents_df$params[1] <- prepare_kToM(1)
+agents_df$params[2] <- prepare_kToM(3)
+agents_df$params[3] <- prepare_kToM(2)
+agents_df$params[4] <- prepare_kToM(3)
+agents_df$params
+agents_df$params[[2]]$p_k 
+agents_df$params[[4]]$p_k #DOES NOT SEEM TO GET IT RIGHT
+
+compete(c(1,2), n_rounds = 100)
+compete(c(3,4), n_rounds = 100)
+compete(pair = c(10,2), n_rounds = 2)
+temp <- compete(c(1,3), n_rounds = 30)
+
+agents_df$params[[1]]
+
+```
+
 ### ___ Random Code ___ ###
+
+#Riccardo's code
+```{r RF code} 
+d<-d[complete.cases(d),]
+d$Left=as.numeric(d$Left)
+d$Handedness=1
+d$Handedness[d$Left==0]=-1
+d$Success=1
+d$Success[d$IndividualPayoff==0]=0
+d$Failure=0
+d$Failure[d$IndividualPayoff==0]=1
+d$X1=d$Handedness*d$Success
+d$X2=d$Handedness*d$Failure
+d$StayBias=c(NA,d$X1[1:(nrow(d)-1)])
+d$LeaveBias=-c(NA,d$X2[1:(nrow(d)-1)])
+
+WinStay <-
+  brm(
+    Left ~ 0 + StayBias + LeaveBias + (0 + StayBias + LeaveBias | Subject),
+    d,
+    family = bernoulli,
+    cores = 2,
+    chains = 2,
+    control = list(adapt_delta = 0.99, max_treedepth = 20),
+    iter = 3e3
+  )
+
+
+
+#Simulating values for beta (behavioral temperature)
+x=data.frame(V=rep(NA,100),B=rep(NA,100),p=rep(NA,100))
+n=1
+for (V in seq(from=0, to=1, by=0.1)){
+  for (B in seq(from=0, to=3, by=0.5)){
+    print(n)
+    x$B[n]=B
+    x$V[n]=V
+    x$p[n]=1 / (1+exp(-V/B))
+    n=n+1
+  }
+}
+ggplot(x, aes(V,p,group=B,color=B))+geom_smooth()
+
+
+```
+
+### ___ Old Code ___ ###
+
+  #I don't dare to delete it yet
 
 #0-ToM
 ```{r 0-ToM}
@@ -444,216 +662,6 @@ ToM0 <- function(ID){
   return(choice)
 }
 ```
-
-#Riccardo's code
-```{r RF code} 
-d<-d[complete.cases(d),]
-d$Left=as.numeric(d$Left)
-d$Handedness=1
-d$Handedness[d$Left==0]=-1
-d$Success=1
-d$Success[d$IndividualPayoff==0]=0
-d$Failure=0
-d$Failure[d$IndividualPayoff==0]=1
-d$X1=d$Handedness*d$Success
-d$X2=d$Handedness*d$Failure
-d$StayBias=c(NA,d$X1[1:(nrow(d)-1)])
-d$LeaveBias=-c(NA,d$X2[1:(nrow(d)-1)])
-
-WinStay <-
-  brm(
-    Left ~ 0 + StayBias + LeaveBias + (0 + StayBias + LeaveBias | Subject),
-    d,
-    family = bernoulli,
-    cores = 2,
-    chains = 2,
-    control = list(adapt_delta = 0.99, max_treedepth = 20),
-    iter = 3e3
-  )
-
-
-
-#Simulating values for beta (behavioral temperature)
-x=data.frame(V=rep(NA,100),B=rep(NA,100),p=rep(NA,100))
-n=1
-for (V in seq(from=0, to=1, by=0.1)){
-  for (B in seq(from=0, to=3, by=0.5)){
-    print(n)
-    x$B[n]=B
-    x$V[n]=V
-    x$p[n]=1 / (1+exp(-V/B))
-    n=n+1
-  }
-}
-ggplot(x, aes(V,p,group=B,color=B))+geom_smooth()
-
-
-```
-
-### ___ K-tom testcode ___ ###
-```{r}
-prepare_kToM <- function(k){
-  behavioral_temp = inv.logit(rnorm(1, mean = logit(.5), sd = 0.2))#?# what is the values in the matlab code?
-  sigma = inv.logit(rnorm(1, mean = logit(0.3), sd = 0.2)) #?# what is the values in the matlab code?
-  
-  if (k == 0){
-    variance = rnorm(1, mean = 1.5, sd = 0.2) #?# what is the values in the matlab code?
-    mu = inv.logit(rnorm(1, mean = logit(0.5), sd = 0.2))
-    
-    params <- list(behavioral_temp = behavioral_temp, 
-                 variance = variance, 
-                 mu = mu, 
-                 sigma = sigma, 
-                 k = k)
-    
-  } else if (k > 0){
-    p_k <- rep(1/k, k) #probabilty for each possible sophistication level of the opponent 
-                       #(note: 1-ToM's opponent == 0-ToM, e.g. p_k = 1) 
-    mu <- rep(0.5, k) #equal chance of choosing both strategies (naive starting point)
-    variance <- rnorm(k, mean = 1.5, sd = 0.2) #!# temporary - should be extracted from matlab 
-    
-      params <- list(behavioral_temp = behavioral_temp, 
-                 variance = variance, 
-                 mu = mu, 
-                 sigma = sigma,
-                 p_k = p_k, 
-                 k = k)
-  }
-  params <- list(params)
-  return(params)
-}
-
-
-update_pk <- function(p_k, choice_op, p_op_1){
-  #eq. S4 p. ix (9) in Devaine, et al. (2017) appendix
-  #calculates P(k)
-  p_k <- choice_op* #if opponent choose 1
-    ((p_k*p_op_1)/sum(p_k*p_op_1)) + 
-    (1-choice_op)* #if opponent choose 0
-    (p_k*(1-p_op_1)/sum(p_k*(1-p_op_1))) 
-  
-  return(p_k)
-}
-
-p_op_1_k <- function(mu, variance){
-  #INPUT
-    #takes a mu and a variance (of opponent)
-  #OUTPUT
-    #p_op_1_k probability of opponent choosing 1 given k, e.g. P(c_op = 1|k')
-  
-  #this calculation uses a semi-analytical approximation by Daunizeau, J. (2017)
-  
-  #constants
-  a <- 0.205
-  b <- -0.319
-  c <- 0.781
-  d <- 0.870
-  
-  #calculation
-  tmp <- (mu + b * variance^c) / sqrt(1 + a * variance^d)
-  p_op_1_k <- log(inv_logit(tmp))
-  
-  return(p_op_1_k)
-}
-
-ID = 1
-last_round <- NA
-params = agents_df$params[agents_df$ID == ID] #!# temp for testing
-params[[1]]
-
-
-k_ToM <- function(ID, last_round, params = agents_df$params[agents_df$ID == ID]){
-    #k-ToM; A Theory of Mind agent in which the agent sophistication level is k
-  #INPUT
-    #ID: the ID of the agent
-    #round_result: the result of the last round
-    #params: a list of X element: ... #!# fill here
-  #OUTPUT
-    #Choice: 0 or 1
-  
-  ###_____ FETCH VARIABLES _____###
-  
-  if (class(last_round)[1] == "tbl_df"){ #if not first round
-    choice_self <- last_round$choice[last_round$ID == ID]
-    choice_op <- last_round$choice[last_round$ID != ID]
-  }
-  
-  k <- params[[1]]$k
-  
-  if (k == 0){ #0-ToM
-    beta <- params[[1]]$behavioral_temp
-    variance <- params[[1]]$variance
-    mu <- params[[1]]$mu
-    sigma <- params[[1]]$sigma
-  } else { #k > 0
-    stop("not done")
-  }
-  
-  ###_____ FIRST ROUND _____###
-  # if (class(last_round)[1] != "tbl_df"){ #first round
-  #   if (k != 0){
-  #     stop("this is not made yet")
-  #   }
-  # }
-  
-  
-  
-  ###_____ UPDATE BELIEFS _____###
-  if (class(last_round)[1] == "tbl_df"){ #not first roundfirst round
-    if (k == 0){ #0-ToM
-      variance <- variance_update(mu, variance, sigma) 
-      mu <- mu_update(mu, variance, choice_op)
-    } else { #k > 0
-      #!# vi skal lige være helt sikre på rækkefølgen af udregningerne
-      #!# vi skal være helt sikre på hvad W/df gør (pt. er det antaget at være et neutral element)
-      mu <- mu + p_k * variance * (ot - p_op_1_k) #posterior mean (mu)
-      variance <- 1 / (1 / variance) + p_k * p_op_1_k * (1 - p_op_1_k) #posterior variance 
-      p_k <- update_pk(p_k, choice_op, p_op_1_k) #P(k'), prob. of o. having sophistication level k'
-      p_op_1_k <- p_op_1_k(mu, variance) #P(c_op = 1 | k'), prob. of op. choosing 1 given sophistication level, k'
-    }
-  }
-  
-  ###_____ SAVE PARAMS _____###
-  agents_df$params[agents_df$ID == ID][[1]]$variance <- variance
-  agents_df$params[agents_df$ID == ID][[1]]$mu <- mu
-  
-  ###_____ CALCULATE RESPONSE _____###
-  if (k == 0){ #0-ToM
-    p_op_1 <- p_op_1(mu, variance, sigma) #estimated probability of opponent chosing 1 in %
-  } else { #k > 0
-    p_op_1 <- p_k*p_op_1_k #the probality of k multiplied by the probality of chosing one given k 
-    stop("not done")
-  }
-  
-  e_payoff_diff <- payoff_difference(p_op_1) #estimated payoff difference
-  p_self_1 <- softmax(e_payoff_diff, beta) #probability of self chosing 1
-  choice <- rbinom(1, 1, p_self_1)
-
-  return(choice)
-}
-
-```
-
-#testing code
-```{r} 
-agents_df <- head(agents_df, 2)
-agents_df$strategy = c("0-ToM", "1-ToM")
-agents_df$strategy_function = rep("k-ToM", 2)
-agents_df$params <- NA
-agents_df
-
-agents_df$params[1] <- prepare_kToM(0)
-agents_df$params[2] <- prepare_kToM(1)
-
-prepare_kToM(2)
-
-
-temp <- compete(c(1,3), n_rounds = 30)
-
-agents_df$params[[1]]
-
-```
-
 
 
 #prepare k-ToM
