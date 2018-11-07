@@ -543,13 +543,12 @@ agents_df$params[2] <- prepare_kToM(3)
 agents_df$params[3] <- prepare_kToM(2)
 agents_df$params[4] <- prepare_kToM(3)
 agents_df$params
-agents_df$params[[2]]$p_k 
-agents_df$params[[4]]$p_k #DOES NOT SEEM TO GET IT RIGHT
+round(agents_df$params[[2]]$p_k , 3)
+round(agents_df$params[[4]]$p_k, 3)
 
-compete(c(1,2), n_rounds = 100)
-compete(c(3,4), n_rounds = 100)
-compete(pair = c(10,2), n_rounds = 2)
-temp <- compete(c(1,3), n_rounds = 30)
+temp  <- compete(c(1,2), n_rounds = 1000)
+temp1 <- compete(c(3,4), n_rounds = 1000)
+
 
 agents_df$params[[1]]
 
