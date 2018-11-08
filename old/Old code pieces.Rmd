@@ -1,0 +1,244 @@
+---
+title: "Old Code"
+author: "Kenneth C. Enevoldsen"
+date: "11/8/2018"
+output: html_document
+---
+
+#0-ToM
+```{r 0-ToM}
+
+###________________________ ToM agents _______________________###
+ 
+  #see Devaine, et al. (2017) https://doi.org/10.1371/journal.pcbi.1005833
+
+#k=0
+ToM0 <- function(ID){ 
+  if (is.na(part_df$param[part_df$ID == ID])){ 
+    #generates individual differences / starting point
+    part_df$param[part_df$ID == ID] <- list(c(bavioral_temp = rnorm(1, mean = .5, sd = 0.2), 
+                                              variance = rnorm(1, mean = 1.5, sd = 0.3),
+                                              mu = rnorm(1, mean = 0.5, sd = 0.2), #this is in logodds #!# set it up so people are slightly more likely to COOP
+                                              sigma = inv.logit(rnorm(1, mean = logit(0.3), sd = 0.2)) 
+                                              ))
+
+  }
+  #fetching info from the participant with the corresponding ID
+  beta <- part_df$param[part_df$ID == ID][[1]]['bavioral_temp']
+  variance <- part_df$param[part_df$ID == ID][[1]]['variance']
+  mu <- part_df$param[part_df$ID == ID][[1]]['mu']
+  sigma <- part_df$param[part_df$ID == ID][[1]]['sigma'] 
+  
+  #getting info from the last round
+  current_pair <- paste(pairs[pair,], collapse = "/")
+  last_round <- try(result_df[result_df$pair == current_pair & result_df$round_nr == n_round-1,], 
+                    silent = T) 
+  
+  if ((class(last_round)[1] == "try-error" | empty(last_round)) == FALSE){ #if the data isn't empty and there was no error reading it (e.g. if it was the very first round) - update the variable (this will almost always happen with the exception being the start of a round)
+    
+    a.op <- last_round$choice[last_round$ID != ID] #opponent last choice
+  
+    #update parameters based on opponnents previous choices 
+    variance <- variance_update(mu, variance, sigma) #?# peter: var det variance der skulle være først?
+    mu <- mu_update(mu, variance, a.op)
+    
+    #save new values of variance and mu
+    part_df$param[part_df$ID == ID][[1]]['variance'] <- variance
+    part_df$param[part_df$ID == ID][[1]]['mu'] <- mu
+  }
+  
+  
+  #calculate response
+  e_prop_op_1 <- prop_a.op1(mu, variance, sigma) #estimated probability of opponent chosing 1 in prop
+  e_payoff_diff <- payoff_difference(e_prop_op_1, player, p_matrix) #estimated payoff difference
+  prop_a.self1 <- softmax(e_payoff_diff, beta) #probability of self chosing 1
+  prop_a.self1
+  
+  choice <- rbinom(1, 1, prop_a.self1)
+  
+  
+  
+  return(choice)
+}
+```
+
+
+#prepare k-ToM
+```{r}
+ 
+###_______ Help functions  _______###
+
+sizeXrec <- function(i, P){
+  #Returns the number of k-ToM hidden states
+    #Note from source: Marie Devaine wrote this in November 2015
+  #INPUT
+    #i: k-ToM's sophistication level
+    #n_tot_par: total nb of evol/obs params
+  #OUTPUT
+    #n_x: number of k-ToM's hidden sates
+  ##YOU ARE HERE##
+}
+
+###_______ The actual function _______###
+
+prepare_kToM <- function(k){
+  #INPUT
+    #Sofistication level
+  #OUTPUT
+    #Params: a list of all starting parameters of the agents
+  #NOTE:
+    #This code is a translation of the matlab code: prepare_kToM.m and prepare_agents.m
+    #see Devaine, et al. (2017) https://doi.org/10.1371/journal.pcbi.1005833
+    # #%# signifies not implented og currently implementing
+  
+  
+  
+  theta = -2 #-log(2); % (log-) prior volatility 
+  #%#       [options,dim] = prepare_kToM(K,game,role,0);
+  #%#       f = @f_kToM;
+  #%#       g = @g_kToM;
+  phi = c(-1, 0) # (log-) behavioral temperature and bias
+  #%#       inF = options.inF;
+  #%#       inG = options.inG;
+  #%#       x0 = options.priors.muX0;
+  #%#       inF.dummyPar = [1;0;0]
+  n_obs_par = 2 #Number of observation parameters
+  n_evo_par = 1 #Number of evolution parameters
+  n_tot_par = n_obs_par + n_evo_par #Total number og parameters #KCE: can just be 3
+  
+  #%#         inG = inF; #?# RF, what is this exactly?
+  #%#         inG.indlev = defIndlev(K,NtotPar); % states' indexing
+  #defIndlev.m:
+  ind_level <- list() #individual levels
+    #Note: if k == 0 this list is empty as 0-ToM oppononent has no individual levels
+  if (k > 0){
+    for (i in 1:k){
+      ind_level$op_k[i]=i-1
+      
+      #sizeXi = sizeXrec(i-1,NtotPar)
+      #sizeXrec.m
+        #Number of hidden states (x)
+      if (i-1 == 0){ #e.g. if the opponent is a 1-ToM
+        n_x = 2 #number of hidden states (x)
+      } else {
+        
+      }
+      
+      
+      
+      
+      
+    }
+    
+  }
+  
+  
+  #%#         inG.npara = NtotPar;
+  #%#         options.inF = inF;
+  #%#         options.inG = inG;
+  
+  prior_mu <- list()
+  
+  if (k>0){
+    for (i in 1:k){
+      # % prior (log-) volatility = -1 (opponent = efficient learner)
+      prior_mu$ind_level[i] = 0
+      #   % "forgetting" of opponent's sophistication
+      #   if inF.diluteP==1
+      #       indDil = inG.indlev(j).Par(3); % index of hidden-state encoding E[invsigm dilut. coef.]
+      #       options.priors.muX0(indDil) = -2;
+      #   end
+      #   % behavioural temperature = -1 (opponent = exploitative decider)
+      #   indTemp = inG.indlev(j).Par(2*inF.indParev+1); % index of hidden-state encoding E[log temp]
+      #   options.priors.muX0(indTemp) = 0;%-1;
+    }
+    
+  }
+  
+  
+  
+  
+  params <- list(list())
+  
+  return(params)
+}
+```
+
+
+#k-ToM #!# WIP
+```{r k-ToM}
+  #see Devaine, et al. (2017) https://doi.org/10.1371/journal.pcbi.1005833
+
+
+
+k-ToM <- function(ID, last_round, params = agents_df$params[agents_df$ID == ID]){
+  strategy_string <- agents_df$strategy[agents_df$ID == ID]
+  k <- str_extract(strategy_string, "[0-9]") #agents sofistication level
+
+  
+  
+}
+
+  #NOTE: The following is a translation of recToMfunction.m
+  
+#k-ToM
+  #input original: x (hidden states, see inF.indlev), P (evolution params), u (inputs e.g. previous choice), inF (input structure - see prepape_kToM.m)
+  #output original: fx (updated hidden variables), indlevel (recursive states indexing see defIndlev.m)
+
+#input this script, ID
+
+level <- 1 # depth of recursive beliefs (k=level) #!# currently dummycoded k=1
+
+#metaweight (w=1) is currently assumed to be 1
+#diluteP is currently assumed to be 1 or 0 (whichever is the neutral element) - as we assume opponent params don't drift over time (correctly so in this case)
+
+if (level == 0){
+  print("not made yet") break
+} else {
+  #run k-ToM
+  #fetch stuff #needs stuff #!# add this
+  
+  ### 1) Update P(k'): agent's belief regarding opponent's level. k-ToM maintains parallel prediction P(c.op = 1|k') about opponents next more (c.op) depending on opponent's level (k')
+  
+  if (first_trial==T){ #if it is the first trial #!# dummycoded
+    Pk <- 1/level*rep(1, level)#max entropic belief about opponent's level e.g. probability of opponent having k-level is equal when no information is known (starts at k=0). Note: 1-ToM's opponent = 0-ToM 
+    if (level > 1){
+      print("not made yet") break
+    }
+    
+  } else { 
+    if (level > 1) { # k >= 2
+      print("not made yet") break
+    }
+  }  
+  ### 2) Update P(theta|k'), the agent's belief about her opponnent's params. (Note: that we do not assume the opponents beliefs to drift)
+    
+  ## 2.1) update E[theta|k'] & V[theta|k'] (opponents mu and variance)
+  for (j in 1:level){ # loop through the admissable levels of the opponent (k' = j-1) #?# maybe a more meaningful name than j?
+    j.Pk <- Pk[j]
+    #in.f   <-- not really sure here (get back to it - marked with ** on sheet)
+    if (first_trial==T){ #if it is the first trial #!# dummycoded
+      #don't update parameters
+      #!# add stuff here
+    } else { #VB-Laplace (variational bayes) update rule for k-ToM's belief 
+      #needed here: 
+        #Par_k: K-ToM's prior mean and variance on his opponent's params
+        #theta: k-ToM's assumed log-volatility of his opponent's params
+        #ot: k-ToM's opponents
+        #in: precalculated intermediary variable
+      #NB: VB update of opponent's params does not account for potential indentifiability issues between params (cf. mean-field assumption)
+      Pk = j.prop_k #synes det her er double trouble men der er sikkert en grund
+      prop_1.op <- inv.logit()#P(c.op = 1|k) 
+      V0 <- exp(Par_k(indV)) #prior variance
+      Vu <- 1/((1/V0)+Pk*prop_1.op*(1-prop_1.op))  #Posterior variance #eq. s4
+      E0 <- indMu
+      Eu <- E0 + Pk * Vu * (c.op-prop_1.op)    #posterior mean
+      #output results
+      indV <- log(Vu)
+      indMu <-  Eu
+    }
+  }
+      
+    
+}
+```
