@@ -16,6 +16,7 @@ To do:
   Figure out the relation between "ID" and "player". Only one of them should be necessary. Perhaps we can just use "player" to select column in the last_round and similar places? 
   Test the code. Especially: make it run in a competitive game. See if the higher k-levels usually win against the lower ones. Also test 0-ToM against RB's
   Edit the description for RB
+  Edit the description of the U function
 
 
 Minor issue:
