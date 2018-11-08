@@ -121,6 +121,8 @@ SIMULATE = function() {
     return(c(choice, 0, 0))
   }
   
+  
+  
   ###### ------ 0-ToM ------ ######
   #Using the equations from the Reading Wilds Minds paper
   

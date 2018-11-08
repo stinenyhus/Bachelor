@@ -11,8 +11,11 @@ To do:
   do a simulation of good sigma values (see RF simulation code)
   (add equation number)
   for the 0-ToM there might be a double up on some of the code from k-ToM - make sure this is not the case
-  Add a general payoff matrix
-  Make value function able to deal with competitive games / assymmetrical value functions
+  
+  Add "p_matrix"" and "player" to all functions. Currently done until and including WSLS.
+  Figure out the relation between "ID" and "player". Only one of them should be necessary. Perhaps we can just use "player" to select column in the last_round and similar places? 
+  Test the code. Especially: make it run in a competitive game. See if the higher k-levels usually win against the lower ones. Also test 0-ToM against RB's
+  Edit the description for RB
 
 
 Minor issue:
@@ -63,16 +66,43 @@ qplot(x, y, fill=color, data=x1, geom='tile') + scale_fill_manual(values = colou
 
 #Payoff matrix
 ```{r Payoff matrix}  
+### Pretty Matrix ###
 choice_mapping <- data_frame(stag = c(1), rabbit = c(0))
 
 pretty_p_matrix <- data_frame(x = c("stag", "rabbit"), stag = c("5,5", "3,0"), rabbit = c("0,3", "3,3"))
 pretty_p_matrix
 
-p_matrix <- data_frame(a1_choice = c(1, 0, 1, 0), 
-                       a2_choice = c(1, 1, 0, 0), 
-                       a1_reward = c(5, 3, 0, 3), 
-                       a2_reward = c(5, 0, 3, 3)) 
-p_matrix
+### Payoff matrices for different games ###
+
+custom_matrix <-
+  data_frame(a1_choice = c(1, 0, 1, 0), 
+             a2_choice = c(1, 1, 0, 0), 
+             a1_reward = c(0, 0, 0, 0), 
+             a2_reward = c(0, 0, 0, 0))
+
+staghunt_matrix <-
+  data_frame(a1_choice = c(1, 0, 1, 0), 
+             a2_choice = c(1, 1, 0, 0), 
+             a1_reward = c(5, 3, 0, 3), 
+             a2_reward = c(5, 0, 3, 3))
+
+penny_cooperative_matrix <- 
+  data_frame(a1_choice = c(1, 0, 1, 0), 
+             a2_choice = c(1, 1, 0, 0), 
+             a1_reward = c(1, 0, 0, 1), 
+             a2_reward = c(1, 0, 0, 1))
+
+penny_competitive_matrix <- 
+  data_frame(a1_choice = c(1, 0, 1, 0), 
+             a2_choice = c(1, 1, 0, 0), 
+             a1_reward = c(0, 1, 1, 0), 
+             a2_reward = c(1, 0, 0, 1))
+
+prisoner_matrix <- 
+  data_frame(a1_choice = c(1, 0, 1, 0), 
+             a2_choice = c(1, 1, 0, 0), 
+             a1_reward = c(2, 3, -1, 0), 
+             a2_reward = c(2, -1, 3, 0))
 ```
 
 #create_agents and match_up functions
@@ -174,20 +204,43 @@ prepare <- function(strategy_string){
 ###_________________________ General _________________________###
 
 #utility function
-U <- function(a.self, a.op){ 
-  # takes two arguments
+U <- function(a.self, a.op, player, p_matrix){ 
+  # takes three arguments
   # a.self: choice of self
   # a.op: choice of opponnent
+  # player: which side of the payof matrix is used. 0: first player, 1: second player
   # returns the point reward
-  x <- p_matrix$a1_reward[p_matrix$a1_choice == 1 & p_matrix$a2_choice == 1] #value if both choose 1
-  y <- p_matrix$a1_reward[p_matrix$a1_choice == 0 & p_matrix$a2_choice == 0] #value if self choose 0
   
-  a.self*a.op*x + (1-a.self)*y #if both choose 1 you get 5 points and if you choose 0 you get 3 points
+  # get values from payoff matrix for player 1
+  a_1 <- p_matrix$a1_reward[p_matrix$a1_choice == 1 & p_matrix$a2_choice == 1] #value if both choose 1
+  b_1 <- p_matrix$a1_reward[p_matrix$a1_choice == 1 & p_matrix$a2_choice == 0] #value if self chooses 1 and opponent chooses 0
+  c_1 <- p_matrix$a1_reward[p_matrix$a1_choice == 0 & p_matrix$a2_choice == 1] #value if self chooses 0 and opponent chooses 1
+  d_1 <- p_matrix$a1_reward[p_matrix$a1_choice == 0 & p_matrix$a2_choice == 0] #value if both choose 0
+  
+  # get values from payoff matrix for player 2
+  a_2 <- p_matrix$a2_reward[p_matrix$a1_choice == 1 & p_matrix$a2_choice == 1] #value if both choose 1
+  b_2 <- p_matrix$a2_reward[p_matrix$a1_choice == 1 & p_matrix$a2_choice == 0] #value if self chooses 1 and opponent chooses 0
+  c_2 <- p_matrix$a2_reward[p_matrix$a1_choice == 0 & p_matrix$a2_choice == 1] #value if self chooses 0 and opponent chooses 1
+  d_2 <- p_matrix$a2_reward[p_matrix$a1_choice == 0 & p_matrix$a2_choice == 0] #value if both choose 0
+  
+  #calculate reward
+  (1-player) * #for player 1
+    (  a.self * a.op * a_1 +           #if both choose 1 
+       a.self * (1 - a.op) * b_1 +     #if you choose 1 and opponent chooses 0
+       (1 - a.self) * a.op * c_1 +     #if you choose 0 and the opponent chooses 1
+       (1 - a.self) * (1 - a.op) * d_1 #if both choose 0
+       ) + 
+  player * #for player 2
+    (  a.self * a.op * a_2 +           #if both choose 1 
+       a.self * (1 - a.op) * b_2 +     #if you choose 1 and opponent chooses 0
+       (1 - a.self) * a.op * c_2 +     #if you choose 0 and the opponent chooses 1
+       (1 - a.self) * (1 - a.op) * d_2 #if both choose 0
+       )
 }
 
 #Expected payoff
-payoff_difference <- function(p_op_1){
-  p_op_1*(U(1,1)-U(0,1))+(1-p_op_1)*(U(1,0)-U(0,0))
+payoff_difference <- function(p_op_1, player, p_matrix){
+  p_op_1*(U(1, 1, player, p_matrix)-U(0, 1, player, p_matrix))+(1-p_op_1)*(U(1, 0, player, p_matrix)-U(0, 0, player, p_matrix))
 }
 
 #softmax functions
@@ -235,7 +288,7 @@ variance_update <- function(mu, variance, sigma) {
 
 #Simple Agents functions
 ```{r simple agents}  
-simple <- function(ID, last_round, params = agents_df$params[agents_df$ID == ID]){
+RB <- function(ID, player = NULL, p_matrix = NULL, last_round = NULL, params = agents_df$params[agents_df$ID == ID]){
   #Simple: Used for simple agents:
     #RB: Random choice with a bias 
     #CB: Cooperate with a bias
@@ -251,7 +304,7 @@ simple <- function(ID, last_round, params = agents_df$params[agents_df$ID == ID]
   rbinom(1, 1, prob = params[[1]]$prop)
 }
 
-WSLS <- function(ID, last_round, params = agents_df$params[agents_df$ID == ID]){   
+WSLS <- function(ID, player = NULL, p_matrix = NULL, last_round, params = agents_df$params[agents_df$ID == ID]){   
   #WSLS: Win stay loose switch
   #INPUT
     #ID: the ID of the agent
@@ -259,19 +312,43 @@ WSLS <- function(ID, last_round, params = agents_df$params[agents_df$ID == ID]){
     #params: a list of 1 element: noise
   #OUTPUT
     #Choice: 0 or 1
-  noise <- params$WSLS$noise
-
-  if (class(last_round)[1] != "tbl_df"){ #initial round or missed trial
-    choice <- rbinom(1, 1, prob = 0.5)
-  } else {
-    choice <- last_round$choice[last_round$ID == ID]*last_round$choice[last_round$ID != ID]
-  }
   
-  #add noise #?# RF: should this be a bias rather than noise?
-  choice <- rbinom(1, 1, prob = abs(choice - noise))
+  noise <- params$WSLS$noise #get the noise parameter #MAKE IT SLOPE PARAMETER INSTEAD, ONE FOR LOOSING AND ONE FOR WINNING
+  gain = last_round$points[last_round$ID == ID] #agent's gain last round
+  mean_gain = (1 - player) * mean(p_matrix$a1_reward) + player * mean(p_matrix$a2_reward) # above mean gain: win, below mean gain: loss
+  max_gain = (1 - player) * max(p_matrix$a1_reward) + player * max(p_matrix$a2_reward) # maximum possible gain
+  min_gain = (1 - player) * min(p_matrix$a1_reward) + player * min(p_matrix$a2_reward) # minimum possible gain
+  
+  #Add the minimum value to all values to avoid negatives. Has no effect on the outcomes.
+  gain = gain + min_gain
+  mean_gain = mean_gain + min_gain
+  max_gain = max_gain + min_gain
+  min_gain = min_gain + min_gain
+  
+  if (class(last_round)[1] != "tbl_df") { #initial round or missed trial
+    choice <- rbinom(1, 1, prob = 0.5) #make a random choice
+  } else {
+    if (gain - mean_gain > 0) { #if the player won last round
+    
+      # Input gain relative to maximum gain in a logistic function. Lower noise param randomizes. When noise->infinite the agent always stays if above mean score.
+      probability_stay = 1 / (1 + exp(-noise * (gain/max_gain - mean_gain))) 
+      stay = rbinom(1, 1, prob = probability_stay) #whether the agent stays
+    
+    } else { #if the player lost last round. if gain = mean_gain, probability will be 0.5
+      
+      #Input gain relative to 
+      probability_switch = 1 / (1 + exp(-noise * (min_gain/gain  - mean_gain)))
+      stay = rbinom(1, 1, prob = 1 - probability_switch) #whether the agent stays
+    } 
+    
+  choice <-
+    last_round$choice[last_round$ID == ID] * stay + #if staying equals last choice
+    (1 - last_round$choice[last_round$ID == ID]) * (1 - stay) #if not staying equals opposite of last choice
+  }
   
   return(choice)
 }
+
 
 SoftmaxTitTat <- function(ID, last_round, params = agents_df$params[agents_df$ID == ID]) {  
   #SoftmaxTitTat: A Tit for tat agent using a softmax function
