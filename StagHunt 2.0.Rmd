@@ -11,6 +11,8 @@ To do:
   do a simulation of good sigma values (see RF simulation code)
   (add equation number)
   for the 0-ToM there might be a double up on some of the code from k-ToM - make sure this is not the case
+  Add a general payoff matrix
+  Make value function able to deal with competitive games / assymmetrical value functions
 
 
 Minor issue:
