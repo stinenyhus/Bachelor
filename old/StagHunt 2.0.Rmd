@@ -34,7 +34,6 @@ Minor issue:
 
 #Packages and WD
 ```{r packages and wd} 
-setwd("/Users/kennethenevoldsen/Desktop/Bachelor/Bachelor_code/Bachelor/")
 library(pacman)
 p_load(plyr, tidyverse, raster, reshape2, knitr, brms, boot, rethinking, groupdata2)
 ```
@@ -196,12 +195,25 @@ prepare_kToM <- function(k){
     mu <- rep(0.5, k) #equal chance of choosing both strategies (naive starting point)
     variance <- rnorm(k, mean = 1.5, sd = 0.2) #!# temporary - should be extracted from matlab 
     
-      params <- list(behavioral_temp = behavioral_temp, 
+    
+    params <- list(behavioral_temp = behavioral_temp, 
                  variance = variance, 
                  mu = mu, 
-                 sigma = sigma,
-                 p_k = p_k, 
+                 sigma = sigma, 
                  k = k)
+    
+  } else if (k > 0){
+    p_k <- rep(1/k, k) #probabilty for each possible sophistication level of the opponent 
+                       #(note: 1-ToM's opponent == 0-ToM, e.g. p_k = 1) 
+    mu <- rep(0.5, k) #equal chance of choosing both strategies (naive starting point)
+    variance <- rnorm(k, mean = 1.5, sd = 0.2) #!# temporary - should be extracted from matlab 
+    
+    params <- list(behavioral_temp = behavioral_temp, 
+               variance = variance, 
+               mu = mu, 
+               sigma = sigma,
+               p_k = p_k, 
+               k = k)
   }
   params <- list(params)
   return(params)
@@ -366,6 +378,7 @@ p_op_1_k_fun <- function(mu, variance){
 
 #Simple Agents functions
 ```{r simple agents}  
+###Random Choice with a Bias
 RB <- function(ID, player = NULL, p_matrix = NULL, last_round = NULL, params = agents_df$params[agents_df$ID == ID]){
   #RB: Random choice with a bias 
   #INPUT
@@ -377,6 +390,7 @@ RB <- function(ID, player = NULL, p_matrix = NULL, last_round = NULL, params = a
   rbinom(1, 1, prob = params[[1]]$prop)
 }
 
+###Win-Stay-Loose-Switch
 WSLS <- function(ID, player, p_matrix, last_round, 
                  params = agents_df$params[agents_df$ID == ID]){   
   #WSLS: Win stay loose switch
@@ -423,7 +437,7 @@ WSLS <- function(ID, player, p_matrix, last_round,
   return(choice)
 }
 
-
+### Softmax Tit for Tat
 SoftmaxTitTat <- function(ID, player = NULL, p_matrix, last_round, 
                  params = agents_df$params[agents_df$ID == ID]) {  
   #SoftmaxTitTat: A Tit for tat agent using a softmax function
@@ -556,13 +570,21 @@ compete <- function(pair, n_rounds = 10, p_matrix){
     a1_choice <- do.call(agents_df$strategy_function[agents_df$ID == a1], 
                          args = list(ID = a1, 
                                      last_round = round_result,
+<<<<<<< HEAD
                                      player = 1,
+=======
+                                     player = 0,
+
                                      p_matrix = p_matrix
                                      ))
     a2_choice <- do.call(agents_df$strategy_function[agents_df$ID == a2], 
                            args = list(ID = a2, 
                                        last_round = round_result,
+<<<<<<< HEAD
                                        player = 2,
+=======
+                                       player = 1,
+>>>>>>> d1b090a700caa9d98c7ff0de33c87ddc0a501efe
                                        p_matrix = p_matrix
                                        ))
       
@@ -591,8 +613,13 @@ compete <- function(pair, n_rounds = 10, p_matrix){
 ```{r simulation}  
   #Create agents
 #The following list is meant as inputs for create_agents()
+<<<<<<< HEAD
 strategy_list <- c("RB", "WSLS", "SoftmaxTitTat", "0-ToM", "1-ToM",  "2-ToM")
 prop_strategy <- c( 0.0,    0.0,             0.0,     0.5,     .5,       0.0) #can be removed 
+=======
+strategy_list <- c("RB", "WSLS", "SoftmaxTitTat", "0-ToM", "1-ToM",  "2-ToM", "8-ToM")
+prop_strategy <- c( 0.0,    0.0,             0.0,     0.0,    0.0,       0.5,     0.5)
+>>>>>>> d1b090a700caa9d98c7ff0de33c87ddc0a501efe
 
 agents_df <- create_agents(n_agents = 10, 
               strategy = strategy_list, 
@@ -605,9 +632,14 @@ pairs <- match_up(agents_list = agents_df$ID, matchup_type = "random")
   #preparing agents
 agents_df$params <- sapply(agents_df$strategy, prepare)
 
+<<<<<<< HEAD
   #make the agents compete in the staghunt
 result_list <- apply(pairs, 1, compete, n_rounds = 30) #!# add payoff matrix to arg
 #using apply to apply compete() to pairs and adding n_rounds as an argument to compete()
+=======
+#make the agents compete in the staghunt
+result_list <- apply(pairs, 1, compete, n_rounds = 300, p_matrix = penny_competitive_matrix) #using apply to apply compete() to pairs and adding n_rounds as an argument to compete()
+>>>>>>> d1b090a700caa9d98c7ff0de33c87ddc0a501efe
 
   #bind the resulting dataframe by row
 result_df <- result_list %>% bind_rows()
