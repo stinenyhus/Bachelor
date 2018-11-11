@@ -6,23 +6,15 @@ output: html_document
 editor_options: 
   chunk_output_type: console
 ---
-<<<<<<< HEAD:StagHunt 2.0.Rmd
-#last commit (KCE)
-Bugfixes
-Preliminary testing of script
-Fixed WSLS
-=======
-#last commit (PTW)
-Bugfixes
-Preliminary testing of script
-Fixed some of WSLS
->>>>>>> 7f01edc8a3bab607007eedddf800ed753d7ded26:StagHunt-2.0.Rmd
+
+#Last Commit - Merged
 
 
 To do:
   do a simulation of good sigma values (see RF simulation code)
   (add equation number)
   for the 0-ToM there might be a double up on some of the code from k-ToM - make sure this is not the case
+  Fix WSLS
   
   logit(x>1) doesn't work, so parameter values above 1 isn't possible. We should find a fix for that. Perhaps a different function than logit?
      - Look at the params for fixing this
