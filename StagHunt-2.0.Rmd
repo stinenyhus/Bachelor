@@ -6,6 +6,17 @@ output: html_document
 editor_options: 
   chunk_output_type: console
 ---
+#fixing inv_logit(), exp(), ... (state of variables)
+
+fiks 
+  p_op_1_fun
+  p_op_1_k_fun
+
+fiks sigma
+
+
+
+
 
 #Last Commit - Merged
 
@@ -15,6 +26,8 @@ To do:
   (add equation number)
   for the 0-ToM there might be a double up on some of the code from k-ToM - make sure this is not the case
   Fix WSLS
+  TJEK payoff matrix for penny competetive
+  Gør sådan at alt data er gemt undervejs
   
   logit(x>1) doesn't work, so parameter values above 1 isn't possible. We should find a fix for that. Perhaps a different function than logit?
      - Look at the params for fixing this
@@ -25,14 +38,19 @@ To do:
   Edit the description of the U function
 
 
-Minor issue:
+Minor issue (these are issues which might improve, shorten or make the code more readable, which hopefully will be implemented, but isn't yet. These changes should not change inference in any meaningful way):
   currently the script uses double lists for inputting lists into dataframe - this issue might be fixable using df[[i]], however I am not sure how this will affect the apply functions.
   The round robin does really work with the current setup for k-ToM as parameters in reset
+  make utility function to a 2x2x2 matrix (change the payoff matrices)
+  add bias to softmax (see ObsRecGen.m in VBA package)
+  
 
 #Packages and WD
 ```{r packages and wd} 
 library(pacman)
-p_load(plyr, tidyverse, raster, reshape2, knitr, brms, boot, rethinking, groupdata2)
+#devtools::install_github("thomasp85/patchwork")
+p_load(plyr, tidyverse, raster, reshape2, knitr, brms, boot, rethinking, groupdata2, patchwork)
+
 
 ```
 
@@ -306,7 +324,7 @@ p_op_1_fun <- function(mu, variance, sigma){
     # sigma is the volatility
   #OUTPUT
     #returns probability of opponent choosing 1 
-  inv.logit(mu/sqrt(1+(variance+sigma)*3/pi^2))
+  inv.logit(mu/sqrt(1+(variance+sigma)*3/pi^2)) #example inv.logit(0/sqrt(exp(0)+(1+(-1))*3/pi^2))
 }
 
 mu_update <- function(mu, variance, choice_op){
