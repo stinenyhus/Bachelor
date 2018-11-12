@@ -1,5 +1,5 @@
 ---
-title: "StagHunt 2.0"
+title: "ToM-Simulation"
 author: "Kenneth C. Enevoldsen og Peter T. Waade"
 date: "10/29/2018"
 output: html_document
