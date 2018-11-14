@@ -21,6 +21,11 @@ fiks sigma
 2 evo params - assumed volatility (theta) = exp(-2), (dilution) 
 e.g. 2+1 = 3
 
+par(1) = volatility
+par(2) = variance på volatility (næsten sikker)
+par(3) = dilution
+
+
 #odder
 P(1) = theta = -2
 f = hvad vi bruger som mu
@@ -560,7 +565,7 @@ k_ToM <- function(ID, player, p_matrix, last_round = NULL,
   if (k == 0){ #0-ToM
     p_op_1 <- p_op_1_fun(mu, variance, sigma) #estimated probability of opponent chosing 1 in %
   } else { #k > 0
-    p_op_1 <- p_k*p_op_1_k #the probality of k multiplied by the probality of chosing one given k  
+    p_op_1 <- sum(p_k*p_op_1_k) #the probality of k multiplied by the probality of chosing one given k  
   }
   
   e_payoff_diff <- payoff_difference(p_op_1, player, p_matrix) #estimated payoff difference
