@@ -36,14 +36,14 @@ VB laplace update rule
 
 
 #tjek op på
-velterra anaysis (for plotting)
+volterra anaysis (for plotting)
 laplace kalman update rule
 
 
-#Last Commit - Merged
+#Last Commit - KCE
+Redid the match_up as well as the agent_df function so that it is easier to do testings.
 
-
-To do:
+#To do:
   do a simulation of good sigma values (see RF simulation code)
   (add equation number)
   for the 0-ToM there might be a double up on some of the code from k-ToM - make sure this is not the case
@@ -65,6 +65,11 @@ Minor issue (these are issues which might improve, shorten or make the code more
   The round robin does really work with the current setup for k-ToM as parameters in reset
   make utility function to a 2x2x2 matrix (change the payoff matrices)
   add bias to softmax (see ObsRecGen.m in VBA package)
+  Lav dette til en package se evt. følgende links (begge ser ud til at tage ca. 15-30 min) :
+  https://www.analyticsvidhya.com/blog/2017/03/create-packages-r-cran-github/
+  https://web.mit.edu/insong/www/pdf/rpackage_instructions.pdf
+    lav en vignette til packagen (dette er basically koden til bacheloren)
+  
   
 
 #Packages and WD
@@ -149,7 +154,7 @@ prisoner_matrix <-
 
 #create_agents and match_up functions
 ```{r create_agents and match_up} 
-create_agents <- function(n_agents = 10, strategy, prop = NULL, list_strat = NULL, ...){ 
+create_agents <- function(n_agents = NULL, strategy = NULL, prop = NULL, list_strat = NULL, ...){ 
   #INPUT
     #n_agents: the desired number of agents
     #n_rounds: the desired number of round
@@ -167,21 +172,23 @@ create_agents <- function(n_agents = 10, strategy, prop = NULL, list_strat = NUL
   #OUTPUT
     #A dataframe of agents with their given strategies
   
-  n_strat <- length(strategy)
-    #group the data into groups of the strategies
-  output <- groupdata2::group(data_frame(ID = seq(n_agents)), n_strat, col_name = "strategy", ...)
-  output$strategy
-  levels(output$strategy) <- strategy
-  
-  if (is.null(prop) == F){ #if a propability is given sample the strategies randomly according to the prop.
-    output <- data_frame(ID=seq(n_agents), 
-                      strategy=sample(strategy_list, n_agents, prob = prop_strategy, replace=TRUE))
-  } else if (is.null(list_strat) == F){ #if 
-    output <- data_frame(ID=seq(n_agents), 
-                      strategy=list_strat)
+  if (is.null(n_agents)){#if no number of agents were given it takes the length of list_strat
+    n_agents <- length(list_strat)
   }
   
-
+  if (is.null(list_strat) == F){ #if a list of strategies is given use that
+    output <- data_frame(ID=seq(n_agents), 
+                      strategy=list_strat)
+  } else if (is.null(strategy) == F & is.null(prop)){ #if there was given a strategy but no probabilities for those strategies
+     n_strat <- length(strategy)
+      #group the data into groups of the strategies
+    output <- groupdata2::group(data_frame(ID = seq(n_agents)), n_strat, col_name = "strategy", ...)
+    output$strategy
+    levels(output$strategy) <- strategy
+  } else if (is.null(strategy) == F & is.null(prop) == F){#if a propability is given sample the strategies randomly according to the prop.
+    output <- data_frame(ID=seq(n_agents), 
+                      strategy=sample(strategy_list, n_agents, prob = prop_strategy, replace=TRUE))
+  }
   output$strategy_function <- if_else(output$strategy
                                       %in% c("RB", "WSLS", "SoftmaxTitTat"),
                                       output$strategy, "k_ToM") #All k-ToM's use the function k-ToM
@@ -205,11 +212,12 @@ match_up <- function(agents_list, matchup_type){
   } else if (matchup_type == "RR"){
     t(combn(agents_list, 2)) #create all possible pairs
   } else if (matchup_type == "half_half") { #Make the first half of the strategies fight the second half
-    stop("This Matchup Type isn't ready yet")
+    matrix(agents_list, ncol = 2)
   } else {
     stop("Please chose a valid matchup_type")
   }
 }
+
 ```
 
 #Prepare agents function
@@ -633,26 +641,19 @@ compete <- function(pair, n_rounds = 10, p_matrix){
 ```{r simulation}  
   #Create agents
 #The following list is meant as inputs for create_agents()
-strategy_list <- c("RB", "WSLS", "SoftmaxTitTat", "0-ToM", "1-ToM",  "2-ToM", "8-ToM")
-prop_strategy <- c( 0.0,    0.0,             0.0,     0.0,    0.0,       0.5,     0.5)
-<<<<<<< HEAD:StagHunt 2.0.Rmd
-strategies_manual <- c(rep("1-ToM", 9), rep("10-ToM", 1))
-=======
-strategies_manual <- c(rep("RB", 5), rep("0-ToM", 5))
->>>>>>> 7f01edc8a3bab607007eedddf800ed753d7ded26:StagHunt-2.0.Rmd
 
-#Use the probabilities
-# agents_df <- create_agents(n_agents = 10, 
-#               strategy = strategy_list, 
-#               prop = prop_strategy)
+strategies_manual <- sort(rep(c("0-ToM", "1-ToM", "2-ToM", "3-ToM"), 4))
+strategies_manual <- c(strategies_manual, rep(c("0-ToM", "1-ToM", "2-ToM", "3-ToM"),4))
 
 #Use the manual list
-agents_df <- create_agents(n_agents = 10, 
-              strategy = strategy_list, 
-              list_strat = strategies_manual)
+agents_df <- create_agents(list_strat = strategies_manual)
 
   #creating pairs
-pairs <- match_up(agents_list = agents_df$ID, matchup_type = "random")
+pairs <- match_up(agents_list = agents_df$ID, matchup_type = "half_half")
+
+#add names to pairs #not required but nice to look at for seeing the strategy matching 
+pairing <- dplyr::select(as_tibble(pairs), player1 = V1, player2 = V2) %>% 
+  mutate(strat1 = agents_df$strategy[agents_df$ID == player1], strat2 = agents_df$strategy[agents_df$ID == player2])
 
   #preparing agents
 agents_df$params <- sapply(agents_df$strategy, prepare)
