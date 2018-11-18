@@ -51,42 +51,11 @@ prisoner_matrix <-
 
 #Prepare agents functions
 ```{r prepare}
-prepare_kToM <- function(k){ 
-  #!# note in the following the sd=0, but the intention is to add it using an argument
-  behavioral_temp = rnorm(1, mean = 0.37, sd = 0.0) #note: exp(-1) = 0.37
-  sigma = rnorm(1, mean = 0.14, sd = 0.0) #, note exp(-2) = 0.14 #!# assumed from matlab code where theta = -2
-  
-  if (k == 0){
-    variance = rnorm(1, mean = 1, sd = 0.0) #note exp(0) = 1
-    mu = rnorm(1, mean = 0.5, sd = 0.0) #note inv.logit(0.5) = 0
-    
-    params <- list(behavioral_temp = behavioral_temp, 
-                 variance = variance, 
-                 mu = mu, 
-                 sigma = sigma, 
-                 k = k)
-    
-  } else if (k > 0){
-    p_k <- rep(1/k, k) #probabilty for each possible sophistication level of the opponent 
-                       #(note: 1-ToM's opponent == 0-ToM, e.g. p_k = 1) 
-    mu <- rep(0.5, k) #equal chance of choosing both strategies (naive starting point)
-    variance <- rnorm(k, mean = 1, sd = 0.0)
-    
-      params <- list(behavioral_temp = behavioral_temp, 
-                 variance = variance, 
-                 mu = mu, 
-                 sigma = sigma,
-                 p_k = p_k, 
-                 k = k)
-  }
-  params <- list(params)
-  return(params)
-}
-
 prepare <- function(strategy_string, RB_prop = 0.5){
   #INPUT
     #strategy_string: A string of the strategy the agents should apply
-    #rb_prop: Probability of opponenent choosing 1
+    #rb_prop: - 
+    #
   #OUTPUT
     #The prepared parameters of the agent.
   
@@ -106,7 +75,38 @@ prepare <- function(strategy_string, RB_prop = 0.5){
   } else {
     stop("Could not find strategy, try to check for spelling errors")
   }
+
   return(params)
+}
+
+prepare_df <- function(agent_df_unprep, args = NULL){
+  #INPUT
+    #agent_df a tibble prepared with prepare_agents
+    #args, a character vector of arguments to pass two the prepare function
+      #One string should be given pr. agents, an empty string simply used deffaults
+      #Note it prepared player1 then Player2 so all player1's should be first in the list
+  #OUTPUT
+    #The agent_df with prepared features
+  
+  p1_args <- args[1:(nrow(agent_df_unprep))]
+  p2_args <- args[-(1:(nrow(agent_df_unprep)))]
+
+    #adding commas for the eval expression, should only be there is there is aditional arguments
+  if_else(nchar(p1_args) != 0 ,paste(",", p1_args), p1_args) 
+  ifelse(nchar(p2_args) != 0 ,paste(",", p2_args), p2_args)
+  
+    #calling the prepare function
+  for (i in 1: length(p1_args)){
+    agent_df_unprep$params_p1[i] <- eval(parse(text = 
+                                  paste("prepare(strategy_string = '", agent_df_unprep$player1[i], "' ,", p1_args[i], ")", sep = "")))
+  }
+  for (i in 1: length(p2_args)){
+    agent_df_unprep$params_p2[i] <- eval(parse(text = 
+                                  paste("prepare(strategy_string = '", agent_df_unprep$player2[i], "' ,", p2_args[i], ")", sep = "")))
+  }
+  
+  
+  return(agent_df_unprep)
 }
 ```
 
@@ -280,22 +280,28 @@ p_op_1_k_fun <- function(mu, variance){
 
 #Simple Agents functions
 ```{r simple agents}  
-###Random Choice with a Bias
-RB <- function(ID, player = NULL, p_matrix = NULL, last_round = NULL, params = agents_df$params[agents_df$ID == ID]){
+###Random Choice with a Bias 
+RB <- function(params, player = NULL, p_matrix = NULL, last_round = NULL, return_params = T){ 
   #RB: Random choice with a bias 
   #INPUT
     #params: a list of 1 element, where the element is the prop of choosing 1 
   #OUTPUT
     #Choice: 0 or 1
+    #Updated parameter: This is for consistency, but is in practice not used
   
   #randomly select rabbit or stag (with a slight bias)
-  rbinom(1, 1, prob = params[[1]]$prop)
+  choice <- rbinom(1, 1, prob = params[[1]]$prop)
+  
+  if (return_params = T){
+    params <- "Do not update parameters"
+    return(list(choice = choice, params = params))
+  } else {
+    return(choice)
+  }
 }
 
-
 ###Win-Stay-Loose-Switch
-WSLS <- function(ID, player, p_matrix, last_round, 
-                 params = agents_df$params[agents_df$ID == ID]){   
+WSLS <- function(player, p_matrix, last_round, params){   
   #WSLS: Win stay loose switch
   #INPUT
     #ID: the ID of the agent
@@ -341,8 +347,14 @@ WSLS <- function(ID, player, p_matrix, last_round,
 }
 
 ### Softmax Tit for Tat
-SoftmaxTitTat <- function(ID, player = NULL, p_matrix, last_round, 
-                 params = agents_df$params[agents_df$ID == ID]) {  
+
+args = list(last_round = round_result,
+                                     player = 0,
+                                     p_matrix = p_matrix,
+                                     params = p1_params
+                                     ))
+
+SoftmaxTitTat <- function(params, p_matrix, last_round, player) {  
   #SoftmaxTitTat: A Tit for tat agent using a softmax function
   #INPUT
     #ID: the ID of the agent
@@ -352,7 +364,7 @@ SoftmaxTitTat <- function(ID, player = NULL, p_matrix, last_round,
     #Choice: 0 or 1
   
   beta <- params$SoftmaxTitTat$bavioral_temp
-  c_op <- last_round$choice[last_round$ID != ID]
+  c_op <- last_round$choice[player+1]
   
   if (class(last_round)[1] != "tbl_df"){ #initial round or missed trial
     #Start by assuming you opponent will COOP - will make the agents every likely to COOP
@@ -369,7 +381,7 @@ SoftmaxTitTat <- function(ID, player = NULL, p_matrix, last_round,
 
 #Compete function
 ```{r compete}
-compete_all <- function(agent_df, n_rounds = 10, p_matrix, updated_params=T){
+compete_all <- function(agent_df, p_matrix, n_rounds = 10){
   #call the compete function for each pair in the agent_df
   
   #INPUT
@@ -384,9 +396,13 @@ compete_all <- function(agent_df, n_rounds = 10, p_matrix, updated_params=T){
   return(result_df)
 }
 
-
-
-compete <- function(player1, player2, p1_params, p2_params, n_rounds=10, p_matrix){
+compete(player1 = agent_df$player1, 
+        player2 = agent_df$player2, 
+        p1_params = agent_df$params_p1, 
+        p2_params = agent_df$params_p2,  
+        n_rounds = 10, 
+        p_matrix = penny_competitive_matrix)
+compete <- function(player1, player2, p1_params, p2_params, p_matrix, n_rounds = 10){ 
   
     #this is for when the compete_all function is used - it simply unpacks the apply function
   if (class(player1) == "list"){
@@ -400,23 +416,24 @@ compete <- function(player1, player2, p1_params, p2_params, n_rounds=10, p_matri
     #setting to NA to signify it is the first round
   round_result <- NA
   
-    #fetch strategy function
-  strat_p1 <- if_else(grepl("-ToM", player1, "k_ToM", player1))
-  strat_p2 <- if_else(grepl("-ToM", player2, "k_ToM", player2))
+    #fetch strategy function - just the player name unless it is a k-ToM
+  strat_p1 <- if_else(grepl("-ToM", player1), "k_ToM", player1)
+  strat_p2 <- if_else(grepl("-ToM", player2), "k_ToM", player2)
   
   for (round in 1:n_rounds){
-      #calls the strategy function for each agent and gives it the ID (a1/a2) as a argument 
+      #calls the strategy function for each agent and gives it the player as a argument 
     a1_choice <- do.call(strat_p1, 
-                         args = list(ID = a1, 
-                                     last_round = round_result,
+                         args = list(last_round = round_result,
                                      player = 0,
-                                     p_matrix = p_matrix
+                                     p_matrix = p_matrix,
+                                     params = p1_params
                                      ))
     a2_choice <- do.call(strat_p2, 
-                           args = list(ID = a2, 
+                           args = list( 
                                        last_round = round_result,
                                        player = 1,
-                                       p_matrix = p_matrix
+                                       p_matrix = p_matrix,
+                                       params = p2_params
                                        ))
       
       #generate result
@@ -439,8 +456,6 @@ compete <- function(player1, player2, p1_params, p2_params, n_rounds=10, p_matri
   }
   return(result_df)
 }
-
-
 
 compete <- function(player1_strategy, player2_strategy, player1_params, player2_params, n_rounds = 10, p_matrix){   
   #INPUT
@@ -492,14 +507,49 @@ compete <- function(player1_strategy, player2_strategy, player1_params, player2_
 ```
 
 
-#Running all the things
+#Simulation
 ```{r simulation}  
-
+#Preperation with deffaults
 strategies = c("RB", "WSLS", "SoftmaxTitTat", "0-ToM", "1-ToM", "2-ToM", "3-ToM")
-
+ 
 agent_df <- create_agents(strategies, match_up = "RR", prepare_with_defaults = T)
 agent_df
 
+#Preperation without specified features
+strategies_unprep = c("RB", "RB", "SoftmaxTitTat", "SoftmaxTitTat")
 
+agent_df_unprep <- create_agents(strategies_unprep, match_up = "half_half", prepare_with_defaults = F)
+agent_df_unprep
+
+args_list <- c("RB_prop = 0.1", "RB_prop = 0.9", "", "")#a char vector to pass as arguments for the prepare_df function
+agent_df <- prepare_df(agent_df_unprep = agent_df_unprep, args = args_list)
 
 ```
+
+#Testcode
+```{r testcode}
+strategies_unprep = c("RB", "SoftmaxTitTat")
+
+agent_df_unprep <- create_agents(strategies_unprep, match_up = "half_half", prepare_with_defaults = F)
+
+args_list <- c("RB_prop = 0.5", "")#a char vector to pass as arguments for the prepare_df function
+agent_df <- prepare_df(agent_df_unprep = agent_df_unprep, args = args_list)
+agent_df
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
