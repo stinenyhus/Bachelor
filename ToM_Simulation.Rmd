@@ -76,8 +76,6 @@ Minor issue (these are issues which might improve, shorten or make the code more
 ```{r packages and wd} 
 #devtools::install_github("thomasp85/patchwork")
 pacman::p_load(plyr, tidyverse, raster, reshape2, knitr, brms, boot, rethinking, groupdata2, patchwork)
-
-
 ```
 
 #Game board 
@@ -118,7 +116,7 @@ qplot(x, y, fill=color, data=x1, geom='tile') + scale_fill_manual(values = colou
 ```
 
 #Payoff matrices
-```{r Payoff matrix}  
+```{r Payoff matrix} 
 ### Payoff matrices for different games ###
 
 custom_matrix <-
@@ -153,7 +151,7 @@ prisoner_matrix <-
 ```
 
 #create_agents and match_up functions
-```{r create_agents and match_up} 
+```{r create_agents and match_up}
 create_agents <- function(n_agents = NULL, strategy = NULL, prop = NULL, list_strat = NULL, ...){ 
   #INPUT
     #n_agents: the desired number of agents
@@ -195,7 +193,7 @@ create_agents <- function(n_agents = NULL, strategy = NULL, prop = NULL, list_st
   return(output)
 }
 
-match_up <- function(agents_list, matchup_type){ 
+match_up <- function(agents_list, matchup_type){
   #Generate pairs based on matchup_type given as a string
   
   #INPUT
@@ -222,13 +220,14 @@ match_up <- function(agents_list, matchup_type){
 
 #Prepare agents function
 ```{r prepare}
-prepare_kToM <- function(k){
-  behavioral_temp = inv.logit(rnorm(1, mean = logit(.5), sd = 0.2))#?# what is the values in the matlab code?
-  sigma = inv.logit(rnorm(1, mean = logit(0.37), sd = 0.2)) #?# what is the values in the matlab code?
+prepare_kToM <- function(k){ 
+  #!# note in the following the sd=0, but the intention is to add it using an argument
+  behavioral_temp = rnorm(1, mean = 0.37, sd = 0.0) #note: exp(-1) = 0.37
+  sigma = rnorm(1, mean = 0.14, sd = 0.0) #, note exp(-2) = 0.14 #!# assumed from matlab code where theta = -2
   
   if (k == 0){
-    variance = rnorm(1, mean = 1.5, sd = 0.2) #?# what is the values in the matlab code?
-    mu = inv.logit(rnorm(1, mean = logit(0.5), sd = 0.2))
+    variance = rnorm(1, mean = 1, sd = 0.0) #note exp(0) = 1
+    mu = rnorm(1, mean = 0.5, sd = 0.0) #note inv.logit(0.5) = 0
     
     params <- list(behavioral_temp = behavioral_temp, 
                  variance = variance, 
@@ -240,7 +239,7 @@ prepare_kToM <- function(k){
     p_k <- rep(1/k, k) #probabilty for each possible sophistication level of the opponent 
                        #(note: 1-ToM's opponent == 0-ToM, e.g. p_k = 1) 
     mu <- rep(0.5, k) #equal chance of choosing both strategies (naive starting point)
-    variance <- rnorm(k, mean = 1.5, sd = 0.2) #!# temporary - should be extracted from matlab 
+    variance <- rnorm(k, mean = 1, sd = 0.0)
     
       params <- list(behavioral_temp = behavioral_temp, 
                  variance = variance, 
@@ -506,7 +505,7 @@ SoftmaxTitTat <- function(ID, player = NULL, p_matrix, last_round,
 
 #k-ToM
 ```{r k-ToM}
-k_ToM <- function(ID, player, p_matrix, last_round = NULL, 
+k_ToM <- function(ID, player, p_matrix, last_round = NULL,
                   params = agents_df$params[agents_df$ID == ID]){
     #k-ToM; A Theory of Mind agent in which the agent sophistication level is k
   #INPUT
@@ -764,10 +763,108 @@ ggplot(x, aes(V,p,group=B,color=B))+geom_smooth()
 
 ```
 
-### ___ Old Code ___ ###
+### ___ Test Code ___ ###
 
-  #Moved to file called old code
+#k-ToM
+```{r k-ToM}
+agents_df <- data_frame(ID = seq(4), 
+                        strategy = c("1-ToM", "3-ToM", "2-ToM", "3-ToM"),
+                        strategy_function = rep("k_ToM", 4),
+                        params = NA
+                        )
+agents_df
 
+agents_df$params[1] <- prepare_kToM(1)
+agents_df$params[2] <- prepare_kToM(3)
+agents_df$params[3] <- prepare_kToM(2)
+agents_df$params[4] <- prepare_kToM(3)
+
+agents_df
+
+ID <- 1
+last_round <- last_round1
+p_matrix <-  penny_cooperative_matrix
+params <- agents_df$params[agents_df$ID == ID]
+params
+
+k_ToM <- function(ID, player, p_matrix, last_round = NULL,
+                  params = agents_df$params[agents_df$ID == ID]){
+    #k-ToM; A Theory of Mind agent in which the agent sophistication level is k
+  #INPUT
+    #ID: the ID of the agent
+    #round_result: the result of the last round
+    #params: a list of X element: ... #!# fill here
+    #!#
+    #!#
+  #OUTPUT
+    #Choice: 0 or 1
+  
+  ###_____ FETCH VARIABLES _____###
+  
+  if (class(last_round)[1] == "tbl_df"){ #if not first round
+    choice_self <- last_round$choice[last_round$ID == ID]
+    choice_op <- last_round$choice[last_round$ID != ID]
+  }
+  
+  k <- params[[1]]$k
+  beta <- params[[1]]$behavioral_temp
+  variance <- params[[1]]$variance
+  mu <- params[[1]]$mu
+  
+  if (k == 0){ #0-ToM
+    sigma <- params[[1]]$sigma #!# no sigma for k-ToM, k > 0?
+  } else { #k > 0
+    if (class(last_round)[1] != "tbl_df"){#if it is the first round...
+      p_op_1_k_logodds <- p_op_1_k_fun(mu, variance)  #calculate P(c_op|k')
+      p_op_1_k <- inv_logit(p_op_1_k_logodds)
+    } else { #else fetch it
+      p_op_1_k <- params[[1]]$p_op_1_k
+    }
+    p_k <- params[[1]]$p_k
+  }
+  
+  ###_____ UPDATE BELIEFS _____###
+  if (class(last_round)[1] == "tbl_df"){ #not first roundfirst round
+    if (k == 0){ #0-ToM
+      variance <- variance_update(mu, variance, sigma) 
+      mu <- mu_update(mu, variance, choice_op)
+    } else { #k > 0
+      #!# vi skal lige være helt sikre på rækkefølgen af udregningerne
+      #!# vi skal være helt sikre på hvad W/df gør (pt. er det antaget at være et neutral element)
+      mu <- mu + p_k * variance * (choice_op - p_op_1_k) #posterior mean (mu)
+      variance <- 1 / (1 / variance) + p_k * p_op_1_k * (1 - p_op_1_k) #posterior variance 
+      p_k <- update_pk(p_k, choice_op, p_op_1_k) #P(k'), prob. of o. having sophistication level k'
+      p_op_1_k_logodds <- p_op_1_k_fun(mu, variance) #P(c_op = 1 | k'), prob. of op. choosing 1 given sophistication level, k' (in logodds)
+      p_op_1_k <- inv_logit(p_op_1_k_logodds) #!# should this always be in % 
+    }
+  }
+  
+  ###_____ SAVE PARAMS _____###
+    #<<- means assign to the global variabel (similar to af assign())
+  agents_df$params[agents_df$ID == ID][[1]]$variance <<- variance
+  agents_df$params[agents_df$ID == ID][[1]]$mu <<- mu
+  
+  if (k > 0){
+    agents_df$params[agents_df$ID == ID][[1]]$p_k <<- p_k
+    agents_df$params[agents_df$ID == ID][[1]]$p_op_1_k <<- p_op_1_k
+    print("it did it")#for testing
+  }
+  
+  ###_____ CALCULATE RESPONSE _____###
+  if (k == 0){ #0-ToM
+    p_op_1 <- p_op_1_fun(mu, variance, sigma) #estimated probability of opponent chosing 1 in %
+  } else { #k > 0
+    p_op_1 <- sum(p_k*p_op_1_k) #the probality of k multiplied by the probality of chosing one given k  
+  }
+  
+  e_payoff_diff <- payoff_difference(p_op_1, player, p_matrix) #estimated payoff difference
+  p_self_1 <- softmax(e_payoff_diff, beta) #probability of self chosing 1
+  choice <- rbinom(1, 1, p_self_1)
+
+  return(choice)
+}
+
+```
 
 
 
