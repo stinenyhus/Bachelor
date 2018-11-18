@@ -344,68 +344,68 @@ softmax <- function(e_payoff_diff, beta){
 
 ###______________________ ToM specific _______________________###
 
-#Probability of opponnent a_op choosing 1
-p_op_1_fun <- function(mu, variance, sigma){
-  #INPUT
-    # mu is approximate mean of 0-ToM posterior distribution
-    # variance is subjective uncertainty of the mean 
-    # sigma is the volatility
-  #OUTPUT
-    #returns probability of opponent choosing 1 
-  inv.logit(mu/sqrt(1+(variance+sigma)*3/pi^2)) #example inv.logit(0/sqrt(exp(0)+(1+(-1))*3/pi^2))
-}
+# #Probability of opponnent a_op choosing 1
+# p_op_1_fun <- function(mu, variance, sigma){
+#   #INPUT
+#     # mu is approximate mean of 0-ToM posterior distribution
+#     # variance is subjective uncertainty of the mean 
+#     # sigma is the volatility
+#   #OUTPUT
+#     #returns probability of opponent choosing 1 
+#   inv.logit(mu/sqrt(1+(variance+sigma)*3/pi^2)) #example inv.logit(0/sqrt(exp(0)+(1+(-1))*3/pi^2))
+# }
 
-mu_update <- function(mu, variance, choice_op){
-  #INPUT
-    # mu from the round before
-    # variance form the round before
-    # choice_op, which is the opponents choice last round
-  #OUTPUT
-    # returns an updated mu
-  mu + variance * (choice_op - inv.logit(mu))
-}
+# mu_update <- function(mu, variance, choice_op){
+#   #INPUT
+#     # mu from the round before
+#     # variance form the round before
+#     # choice_op, which is the opponents choice last round
+#   #OUTPUT
+#     # returns an updated mu
+#   mu + variance * (choice_op - inv.logit(mu))
+# }
 
-variance_update <- function(mu, variance, sigma) {
-  #INPUT
-    # mu from last round
-    # variance from last round
-    # sigma: (volatility) higher values mean lower updating
-  #OUTPUT
-    # returns an updated variance
-  1 / (1 / (variance + sigma) + inv.logit(mu) * (1 - inv.logit(mu)))
-}
+# variance_update <- function(mu, variance, sigma) {
+#   #INPUT
+#     # mu from last round
+#     # variance from last round
+#     # sigma: (volatility) higher values mean lower updating
+#   #OUTPUT
+#     # returns an updated variance
+#   1 / (1 / (variance + sigma) + inv.logit(mu) * (1 - inv.logit(mu)))
+# }
 
-update_pk <- function(p_k, choice_op, p_op_1){
-  #eq. S4 p. ix (9) in Devaine, et al. (2017) appendix
-  #calculates P(k)
-  p_k <- choice_op* #if opponent choose 1
-    ((p_k*p_op_1)/sum(p_k*p_op_1)) + 
-    (1-choice_op)* #if opponent choose 0
-    (p_k*(1-p_op_1)/sum(p_k*(1-p_op_1))) 
-  
-  return(p_k)
-}
-
-p_op_1_k_fun <- function(mu, variance){
-  #INPUT
-    #takes a mu and a variance (of opponent)
-  #OUTPUT
-    #p_op_1_k probability of opponent choosing 1 given k, e.g. P(c_op = 1|k') in loggodds
-  
-  #this calculation uses a semi-analytical approximation by Daunizeau, J. (2017)
-  
-  #constants
-  a <- 0.205
-  b <- -0.319
-  c <- 0.781
-  d <- 0.870
-  
-  #calculation
-  tmp <- (mu + b * variance^c) / sqrt(1 + a * variance^d)
-  p_op_1_k <- log(inv_logit(tmp))
-  
-  return(p_op_1_k)
-}
+# update_pk <- function(p_k, choice_op, p_op_1){
+#   #eq. S4 p. ix (9) in Devaine, et al. (2017) appendix
+#   #calculates P(k)
+#   p_k <- choice_op* #if opponent choose 1
+#     ((p_k*p_op_1)/sum(p_k*p_op_1)) + 
+#     (1-choice_op)* #if opponent choose 0
+#     (p_k*(1-p_op_1)/sum(p_k*(1-p_op_1))) 
+#   
+#   return(p_k)
+# }
+# 
+# p_op_1_k_fun <- function(mu, variance){
+#   #INPUT
+#     #takes a mu and a variance (of opponent)
+#   #OUTPUT
+#     #p_op_1_k probability of opponent choosing 1 given k, e.g. P(c_op = 1|k') in loggodds
+#   
+#   #this calculation uses a semi-analytical approximation by Daunizeau, J. (2017)
+#   
+#   #constants
+#   a <- 0.205
+#   b <- -0.319
+#   c <- 0.781
+#   d <- 0.870
+#   
+#   #calculation
+#   tmp <- (mu + b * variance^c) / sqrt(1 + a * variance^d)
+#   p_op_1_k <- log(inv_logit(tmp))
+#   
+#   return(p_op_1_k)
+# }
 
 ```
 
