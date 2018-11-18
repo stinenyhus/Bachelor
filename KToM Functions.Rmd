@@ -1,0 +1,280 @@
+---
+title: "KToM Function"
+author: "Kenneth, Peter"
+date: "18/11/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+#To Do:
+Make everything into "for each k"
+Finish decision function
+Figure out Hidden States Indexing for Recurvise Function
+
+
+
+
+#Learning function - update p(k)
+```{r}
+p_op_1_k_approx_fun <- function(prev_hidden_states){
+  #INPUT
+    #takes a mu and a variance (of opponent)
+  #OUTPUT
+    # probability of opponent choosing 1 given k, e.g. P(c_op = 1|k')
+  
+  #this calculation uses a semi-analytical approximation by Daunizeau, J. (2017)
+  #this is the VBA_Elogsig
+  
+  #input
+  #for each sophistication level K
+  prev_mean # mean of opponent probability estimation VECTOR
+  prev_variance # the variance for each estimated parameter MATRIX
+  prev_gradient # gradients for each parameter MATRIX
+  
+  #constants
+  a <- 0.205
+  b <- -0.319
+  c <- 0.781
+  d <- 0.870
+  
+  #prepare variance
+  prev_variance = exp(prev_variance)*prev_gradient^2
+  
+  #calculate estimated probability of opponent choice
+  tmp <- (prev_mean + b * prev_variance^c) / sqrt(1 + a * prev_variance^d)
+  p_op_1_k_approx <- log(inv_logit(tmp))
+  
+  return(p_op_1_k_approx)
+}
+
+update_pk <- function(prev_hidden_states, choices, p_op_1_k_approx){
+  #eq. S4.3 p. ix (9) in Devaine, et al. (2017) appendix
+  #calculates P(k') - probability for each k
+  
+  #Input
+  prev_c_op #opponent's choice
+  #For each sophistication level k
+  p_op_1_k_approx # probability of opponent choosing 1, approximated semi-analytically VECTOR
+  prev_p_k # probability of sophistication level k VETOR
+  
+  #prepare probability
+  p_op_1_k_approx = exp(p_op_1_k_approx)
+  
+  #calculate
+  p_k <- prev_c_op* #if opponent chose 1
+    ((prev_p_k*p_op_1_k_approx)/sum(prev_p_k*p_op_1_k_approx)) + 
+    (1-prev_c_op)* #if opponent chose 0
+    (prev_p_k*(1-p_op_1_k_approx)/sum(prev_p_k*(1-p_op_1_k_approx))) 
+  
+  return(p_k)
+}
+
+```
+
+#Learning function - updating parameter estimates
+```{r}
+parameter_variance_update <- function(prev_hidden_states, params, p_k) {
+  #eq. S4.5 p. ix (9) in Devaine, et al. (2017) appendix
+  
+  #input
+  volatility = params$volatility
+  #for each k:
+  p_k #the probability of sopistication level k VECTOR
+  prev_param_mean #the mean for each estimated parameter MATRIX
+  prev_variance #the uncertainty for each estimated parameter MATRIX
+  prev_gradient #the gradient for each estimated parameter MATRIX
+  
+  #prepare volatility
+  dummy = c(1,0,0) #dummy parable flags which parameters are affected by volatility #?# We need to figure out which parameter this is targeting!
+  volatility = exp(volatility)*dummy
+  
+  #prepare variance
+  prev_variance = exp(prev_variance)
+  
+  #calculate new variance
+  variance = 
+  1 / 
+    (1 / (prev_variance + volatility) + 
+       p_k * 
+       inv.logit(prev_param_mean) * (1 - inv.logit(prev_param_mean)) * 
+       prev_gradient^2)
+  
+  #logistic transform
+  variance = log(variance)
+  
+  return(variance)
+}  
+
+
+parameter_mean_update <- function(prev_hidden_states, choices, p_k, variance){
+  #input
+  prev_c_op #opponent's choice
+  #for each sophistication level k:
+  p_k # the probability of sophistication level k VECTOR
+  prev_mean #the mean of opponent probability estimation VECTOR
+  prev_param_mean #the mean for each estimated parameter MATRIX
+  variance #the variance of each estimated parameter MATRIX
+  
+  #prepare variance - logistic transform and gradient
+  variance = exp(variance)*prev_gradient
+  
+  #calculate new mean estimates
+  param_mean = 
+  prev_param_mean + p_k * variance * (prev_c_op - inv.logit(prev_mean))
+  
+  #?# "for numerical purposes" - unsure if necessary
+  #param_mean = inv.logit(logit(param_mean))
+  
+  return(param_mean)
+}
+
+```
+
+#Learning function - Updating gradient
+```{r}
+gradient_update = function(opponent_prev_hidden_states, mean, param_mean, reverse_choices, highest_opponent_level, opponent_player) {
+  
+  #input
+  opponent_prev_hidden_states #Opponent's hidden states, for running the learning function
+  reverse_choices #opponent's perspective
+  highest_opponent_level
+  opponent_player
+  mean #the mean of opponent probability estimation VECTOR
+  param_mean #the mean for each estimated parameter MATRIX
+  
+  #increment parameters
+  increment = max(abs(1e-4*param_mean), 1e-4)
+  param_mean_incremented = param_mean + increment
+  
+  for (param in length(param_mean)) {
+      #use the parameter estimates
+      param_mean_temp = param_mean 
+      #but use one of the incremented instead
+      param_mean_temp[param] = param_mean_incremented[param] 
+      
+      #run the learning function of opponent using param_mean_temp as parameter values
+      opponent_hidden_states_incremented = rec_learning_function(prev_hidden_states = opponent_prev_hidden_states, 
+                                                           params = param_mean_temp, 
+                                                           choices = reverse_choices,
+                                                           level = highest_opponent_level,
+                                                           player = opponent_player) 
+      #run the decision function of opponent using the temporary hidden states
+      mean_incremented = decision_function(hidden_states = opponent_hidden_states_incremented,
+                                           choices = reverse_choices,
+                                           player = opponent_player)
+      
+      #calculate the gradient between parameter increment and probability estimate
+      gradient[param] = (mean_incremented - mean)/increment[param]
+  }
+  
+  return(gradient)
+}
+```
+
+#Full learning function
+```{r}
+rec_learning_function = function(
+  prev_hidden_states,
+  params,
+  choices,
+  level,
+  player
+) {
+  
+  #Update p_k
+  p_op_1_k_approx = p_op_1_k_approx_fun(prev_hidden_states)
+  p_k = update_pk(prev_hidden_states, choices, p_op_1_k_approx)
+  
+  #Update parameter estimates
+  variance = parameter_variance_update(prev_hidden_states, params, p_k)
+  param_mean = parameter_mean_update (prev_hidden_states, choices, p_k, variance)
+  
+  #Prepare opponent's perspective
+  reverse_choices = choices[2:1]
+  highest_opponent_level = level-1
+  opponent_player = 1-player
+  opponent_hidden_states = NOTDONE #!# we need to draw the opponent's hidden states from our own. Must be done after indexing of hidden states is complete.
+  
+  #Simulate opponent learning
+  opponent_hidden_states = rec_learning_function(prev_hidden_states = opponent_prev_hidden_states,
+                                                 params = param_mean,
+                                                 choices = reverse_choices,
+                                                 level = highest_opponent_level,
+                                                 player = opponent_player) 
+  
+  #Simulate opponent deciding
+  mean = decision_function(hidden_states = opponent_hidden_states,
+                           choices = reverse_choices,
+                           player = opponent_player)
+  
+  #Update gradient
+  gradient = gradient_update(opponent_prev_hidden_states,
+                             mean,
+                             param_mean,
+                             reverse_choices,
+                             highest_opponent_level,
+                             opponent_player)
+  
+  #Save updated values to new hidden states
+  hidden_states = c(opponent_hidden_states, p_k, mean, param_mean, variance, gradient) #!# Must be done properly when indexing of hidden states has been decided
+  
+  return(hidden_states)
+}
+```
+
+#Decision function - opponent probability
+```{r}
+#Probability of opponnent a_op choosing 1
+p_op_1_k_fun <- function(mean, variance){
+
+  #THIS IS THE VARIANT USED IN THE MATLAB CODE, WHICH DOES NOT USE VOLATILITY
+  
+  #for each sophistication level k:
+  mean #mean opponent probability estimate VECTOR
+  variance #variance of parameter estimates MATRIX
+  a = 0.36 #this number is taken from the matlab code in ObsRecGen
+  
+  #Prepare variance
+  variance = sum(exp(variance)*gradient^2)
+  
+  #calculate opponent's probability of choosing 1
+  p_op_1_k = inv.logit(mean/sqrt(1+a*variance)) 
+  
+  return(p_op_1_k)
+}
+
+# #Probability of opponnent a_op choosing 1
+# p_op_1_fun_k <- function(mean, variance, params){
+# 
+#   #THIS IS THE VARIANT BASED ON THE EQUATIONS, BUT NOT USED IN THE MATLAB CODE
+#   
+#   #input
+#   volatility = params$volatility
+#   #for each sophistication level k:
+#   mean #mean opponent probability estimate VECTOR
+#   variance #variance of parameter estimates MATRIX
+#   
+#   #prepare volatility
+#   dummy = c(1,0,0) #dummy parable flags which parameters are affected by volatility #?# We need to figure out which parameter this is targeting!
+#   volatility = exp(volatility)*dummy
+#   
+#   #Prepare variance
+#   variance = sum(exp(variance)*gradient^2)
+#   
+#   #calculate opponent's probability of choosing 1
+#   p_op_1_fun_k = inv.logit(mean/sqrt(1+(variance+volatility)*3/pi^2)) 
+#   
+#   return(p_op_1_fun_k)
+# }
+
+```
+
+#Full decision function 
+```{r}
+
+```
+
