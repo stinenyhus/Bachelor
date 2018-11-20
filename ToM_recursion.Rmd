@@ -501,7 +501,7 @@ agent_df <- prepare_df(agent_df_unprep = agent_df_unprep, args = args_list)
 
 #Testcode
 ```{r testcode}
-strategies_unprep = c("RB", "WSLS")
+strategies_unprep = c("RB", "SoftmaxTitTat")
 
 agent_df_unprep <- create_agents(strategies_unprep, match_up = "half_half", prepare_with_defaults = F)
 
