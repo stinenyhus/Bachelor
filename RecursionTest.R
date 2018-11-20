@@ -1,7 +1,7 @@
 
 # A rec function
 RecOp <- function(k){
-  output <- NULL
+  print(k)
   for (j in 1:k){
     op <- seq(j)
     level = j
@@ -18,6 +18,7 @@ RecOp <- function(k){
 
 output <- RecOp(3) #IT WORKS!
 
+output
 #fetch variables
   #this is a bit messy, but you could fetch variables recursively but it seems quite intense. 
 output$op_stats$op_stats$op_stats
