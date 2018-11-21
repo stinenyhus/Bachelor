@@ -515,7 +515,7 @@ decision_function = function(
 
 #Full k-ToM function
 ```{r}
-k_ToM = function (params, hidden_states, player, p_matrix, choice_self, choice_op, return_hidden_states = T) {
+k_ToM = function (params, hidden_states, player, level, p_matrix, choice_self, choice_op, return_hidden_states = T) {
   
   #the input comes from last round
   prev_hidden_states = hidden_states
@@ -627,5 +627,23 @@ rec_prepare_k_ToM = function(level, priors = "default") {
 #Testing Space
 ```{r}
 test_hidden_states = rec_prepare_k_ToM(level = 3)
+
+penny_competitive_matrix <- 
+  data_frame(a1_choice = c(1, 0, 1, 0), 
+             a2_choice = c(1, 1, 0, 0), 
+             a1_reward = c(0, 1, 1, 0), 
+             a2_reward = c(1, 0, 0, 1))
+
+params_test = list(behavioural_temperature = -1,
+              volatility = -2)
+
+k_ToM (params = params_test,
+       hidden_states = test_hidden_states,
+       player = 1,
+       level = 3,
+       p_matrix = penny_competitive_matrix,
+       choice_self = 0,
+       choice_op = 1)
+
 ```
 
