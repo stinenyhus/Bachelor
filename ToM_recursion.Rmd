@@ -14,7 +14,7 @@ pacman::p_load(plyr, tidyverse, raster, reshape2, knitr, brms, boot, rethinking,
 ```
 
 #Payoff matrices
-```{r Payoff matrix} 
+```{r Payoff matrix}  
 ### Payoff matrices for different games ###
 
 custom_matrix <-
@@ -51,7 +51,7 @@ prisoner_matrix <-
 
 #Prepare agents functions
 ```{r prepare}
-prepare <- function(strategy_string, RB_prop = 0.5){
+prepare <- function(strategy_string, RB_prop = 0.5){ 
   #INPUT
     #strategy_string: A string of the strategy the agents should apply
     #rb_prop: - 
@@ -61,25 +61,29 @@ prepare <- function(strategy_string, RB_prop = 0.5){
   
   if (strategy_string == "RB") {
     # prop. of approx. 50% of choosing 1 assuming no other values is given
-    params <- list(list("prop" = inv.logit(rnorm(1, mean = logit(RB_prop), sd = 0.1))))
-    
+    params <- list("prop" = inv.logit(rnorm(1, mean = logit(RB_prop), sd = 0.1)))
+    hidden_states = "None"
   } else if (strategy_string == "WSLS") {
-    params <- list(list("noise" = inv.logit(rnorm(1, mean = logit(0.9), sd = 0.1))))
-    
+    params <- list("noise" = inv.logit(rnorm(1, mean = logit(0.9), sd = 0.1)))
+    hidden_states = "None"
   } else if (strategy_string == "SoftmaxTitTat") {
-    params <- list(list("bavioral_temp" = inv.logit(rnorm(1, mean = logit(0.99), sd = 0.2))))
-    
+    params <- list("bavioral_temp" = inv.logit(rnorm(1, mean = logit(0.99), sd = 0.2)))
+    hidden_states = "None"
   } else if (grepl("-ToM", strategy_string)) { #if the strategy is a k-ToM
+    stop("k-tom does not work yet... dumbass..  sorry, but come on!")
     k <- as.numeric(str_extract(strategy_string, "[0-9]"))
-    params = prepare_kToM(k)
+    tmp <- prepare_kToM(k)
+    params <- tmp[[1]]
+    hidden_states <- tmp[[2]]
   } else {
     stop("Could not find strategy, try to check for spelling errors")
   }
 
-  return(params)
+  result <- list(params = params, hidden_states = hidden_states)
+  return(result)
 }
 
-prepare_df <- function(agent_df_unprep, args = NULL){
+prepare_df <- function(agent_df_unprep, args = NULL){ 
   #INPUT
     #agent_df a tibble prepared with prepare_agents
     #args, a character vector of arguments to pass two the prepare function
@@ -93,25 +97,24 @@ prepare_df <- function(agent_df_unprep, args = NULL){
 
     #adding commas for the eval expression, should only be there is there is aditional arguments
   if_else(nchar(p1_args) != 0 ,paste(",", p1_args), p1_args) 
-  ifelse(nchar(p2_args) != 0 ,paste(",", p2_args), p2_args)
+  if_else(nchar(p2_args) != 0 ,paste(",", p2_args), p2_args)
   
     #calling the prepare function
-  for (i in 1: length(p1_args)){
-    agent_df_unprep$params_p1[i] <- eval(parse(text = 
-                                  paste("prepare(strategy_string = '", agent_df_unprep$player1[i], "' ,", p1_args[i], ")", sep = "")))
-  }
-  for (i in 1: length(p2_args)){
-    agent_df_unprep$params_p2[i] <- eval(parse(text = 
-                                  paste("prepare(strategy_string = '", agent_df_unprep$player2[i], "' ,", p2_args[i], ")", sep = "")))
-  }
-  
+  tmp1 <- sapply(agent_df_unprep$player1, prepare)
+  tmp2 <- sapply(agent_df_unprep$player2, prepare)
+    #save params
+  agent_df_unprep$params_p1 <- t(tmp1)[,1]
+  agent_df_unprep$params_p2 <- t(tmp2)[,1]
+    #Save hidden states
+  agent_df_unprep$hidden_states_p1 <- t(tmp1)[,2]
+  agent_df_unprep$hidden_states_p2 <- t(tmp2)[,2]
   
   return(agent_df_unprep)
 }
 ```
 
 #create_agents functions
-```{r create_agents}
+```{r create_agents} 
 create_agents <- function(strategies, match_up = "RR", prepare_with_defaults = T){
   #strategies: a list of strategies given as a vector
     #implemented agent strategies
@@ -143,8 +146,16 @@ create_agents <- function(strategies, match_up = "RR", prepare_with_defaults = T
   }
   
   if (prepare_with_defaults){
-    output$params_p1 <- sapply(output$player1, prepare)
-    output$params_p2 <- sapply(output$player2, prepare)
+    
+        #calling the prepare function
+    tmp1 <- sapply(output$player1, prepare)
+    tmp2 <- sapply(output$player2, prepare)
+      #save params
+    output$params_p1 <- t(tmp1)[,1]
+    output$params_p2 <- t(tmp2)[,1]
+      #Save hidden states
+    output$hidden_states_p1 <- t(tmp1)[,2]
+    output$hidden_states_p2 <- t(tmp2)[,2]
   }
 
   return(output)
@@ -208,8 +219,6 @@ softmax <- function(e_payoff_diff, beta){
     #Returns the probability self choosing 1
   1/(1 + exp(-(e_payoff_diff/beta)))
 }
-
-
 
 ###______________________ ToM specific _______________________###
 
@@ -279,7 +288,7 @@ p_op_1_k_fun <- function(mu, variance){
 ```
 
 #Simple Agents functions
-```{r simple agents}  
+```{r simple agents}
 ###Random Choice with a Bias 
 RB <- function(params, hidden_states = NULL, player = NULL, p_matrix = NULL, choice_self = NULL, choice_op = NULL, return_hidden_states = F){ 
   #RB: Random choice with a bias 
@@ -299,10 +308,8 @@ RB <- function(params, hidden_states = NULL, player = NULL, p_matrix = NULL, cho
   }
 }
 
-
-
 ###Win-Stay-Loose-Switch
-WSLS <- function(params, hidden_states = NULL,  player, p_matrix, choice_self, choice_op){   
+WSLS <- function(params, hidden_states = NULL,  player, p_matrix, choice_self, choice_op, return_hidden_states = F){
   #WSLS: Win stay loose switch
   #INPUT
     #ID: the ID of the agent
@@ -313,22 +320,20 @@ WSLS <- function(params, hidden_states = NULL,  player, p_matrix, choice_self, c
   
   if (is.null(choice_op)) { #initial round or missed trial
     choice <- rbinom(1, 1, prob = 0.5) #make a random choice
-  }
+  } else {
+    noise <- params[[1]]$noise #get the noise parameter #!# MAKE IT SLOPE PARAMETER INSTEAD, ONE FOR LOOSING AND ONE FOR WINNING
+    gain = p_matrix[p_matrix$a1_choice == choice_self ]
+      last_round$points[last_round$ID == ID] #agent's gain last round
+    mean_gain = (1 - player) * mean(p_matrix$a1_reward) + player * mean(p_matrix$a2_reward) # above mean gain: win, below mean gain: loss
+    max_gain = (1 - player) * max(p_matrix$a1_reward) + player * max(p_matrix$a2_reward) # maximum possible gain
+    min_gain = (1 - player) * min(p_matrix$a1_reward) + player * min(p_matrix$a2_reward) # minimum possible gain
+    
+    #Add the minimum value to all values to avoid negatives. Add 1 to all values to avoid 0's. Has no effect on the outcomes.
+    gain = 1 + gain + min_gain
+    mean_gain = 1 + mean_gain + min_gain
+    max_gain = 1 + max_gain + min_gain
+    min_gain = 1 + min_gain + min_gain
   
-  noise <- params[[1]]$noise #get the noise parameter #!# MAKE IT SLOPE PARAMETER INSTEAD, ONE FOR LOOSING AND ONE FOR WINNING
-  gain = p_matrix[p_matrix$a1_choice == choice_self ]
-    last_round$points[last_round$ID == ID] #agent's gain last round
-  mean_gain = (1 - player) * mean(p_matrix$a1_reward) + player * mean(p_matrix$a2_reward) # above mean gain: win, below mean gain: loss
-  max_gain = (1 - player) * max(p_matrix$a1_reward) + player * max(p_matrix$a2_reward) # maximum possible gain
-  min_gain = (1 - player) * min(p_matrix$a1_reward) + player * min(p_matrix$a2_reward) # minimum possible gain
-  
-  #Add the minimum value to all values to avoid negatives. Add 1 to all values to avoid 0's. Has no effect on the outcomes.
-  gain = 1 + gain + min_gain
-  mean_gain = 1 + mean_gain + min_gain
-  max_gain = 1 + max_gain + min_gain
-  min_gain = 1 + min_gain + min_gain
-  
-  else {
     if (gain - mean_gain > 0) { #if the player won last round
     
       # Input gain relative to maximum gain in a logistic function. Lower noise param randomizes. When noise->infinite the agent always stays if above mean score.
@@ -347,7 +352,12 @@ WSLS <- function(params, hidden_states = NULL,  player, p_matrix, choice_self, c
     (1 - last_round$choice[last_round$ID == ID]) * (1 - stay) #if not staying equals opposite of last choice
   }
   
-  return(choice)
+  if (return_hidden_states == T){
+    return_hidden_states <- return_hidden_states #does not update params
+    return(list(choice = choice, hidden_states = hidden_states))
+  } else {
+    return(choice)
+  }
 }
 
 ### Softmax Tit for Tat
@@ -399,8 +409,7 @@ compete_all <- function(agent_df, p_matrix, n_rounds = 10){
   return(result_df)
 }
 
-
-compete <- function(player1, player2, p1_params, p2_params, p_matrix, n_rounds = 10){ 
+compete <- function(player1, player2, p1_params, p2_params, p1_hidden_states = NA, p2_hidden_states = NA, p_matrix, n_rounds = 10){ 
   
     #this is for when the compete_all function is used - it simply unpacks the apply function
   if (class(player1) == "list"){
@@ -410,9 +419,6 @@ compete <- function(player1, player2, p1_params, p2_params, p_matrix, n_rounds =
     p1_params <- list(player1[[3]])
     player2 <- player1[[2]]
     player1 <- player1[[1]]
-    
-    print(p1_params)
-    
   }
   
     #setting to NULL to signify it is the first round
@@ -449,7 +455,7 @@ compete <- function(player1, player2, p1_params, p2_params, p_matrix, n_rounds =
     
     
       #generate result
-    result <- p_matrix[p_matrix$a1_choice == p1$choice & p_matrix$a2_choice == p1$choice,]
+    result <- p_matrix[p_matrix$a1_choice == p1$choice & p_matrix$a2_choice == p2$choice,]
         
     
     #results for next round 
@@ -476,54 +482,49 @@ compete <- function(player1, player2, p1_params, p2_params, p_matrix, n_rounds =
   }
   return(result_df)
 }
-
 ```
 
 
 #Simulation
 ```{r simulation}  
-#Preperation with deffaults
-strategies = c("RB", "WSLS", "SoftmaxTitTat", "0-ToM", "1-ToM", "2-ToM", "3-ToM")
- 
-agent_df <- create_agents(strategies, match_up = "RR", prepare_with_defaults = T)
-agent_df
-
-#Preperation without specified features
-strategies_unprep = c("RB", "RB", "SoftmaxTitTat", "SoftmaxTitTat")
-
-agent_df_unprep <- create_agents(strategies_unprep, match_up = "half_half", prepare_with_defaults = F)
-agent_df_unprep
-
-args_list <- c("RB_prop = 0.1", "RB_prop = 0.9", "", "")#a char vector to pass as arguments for the prepare_df function
-agent_df <- prepare_df(agent_df_unprep = agent_df_unprep, args = args_list)
-
-```
-
-#Testcode
-```{r testcode}
+#Preperation without defaults
 strategies_unprep = c("RB", "SoftmaxTitTat")
 
 agent_df_unprep <- create_agents(strategies_unprep, match_up = "half_half", prepare_with_defaults = F)
+agent_df_unprep
 
 args_list <- c("RB_prop = 0.5", "")#a char vector to pass as arguments for the prepare_df function
 agent_df <- prepare_df(agent_df_unprep = agent_df_unprep, args = args_list)
 agent_df
 
-compete(agent_df$player1, 
-        agent_df$player2, 
-        agent_df$params_p1, 
-        agent_df$params_p2, 
-        p_matrix = penny_competitive_matrix,
-        n_rounds = 10
-        )
+#A single series competition
+result_df <- compete(player1 = agent_df$player1, 
+              player2 = agent_df$player2, 
+              p1_params = agent_df$params_p1, 
+              p2_params = agent_df$params_p2, 
+              p_matrix = penny_competitive_matrix,
+              n_rounds = 10
+              )
 
-compete_all(agent_df, n_rounds = 30, 
+#examining results
+result_df
+result_sum <- result_df %>% group_by(player) %>% summarise(total_point = sum(points), mean_choice = mean(choice))
+result_sum
+
+#Preperation with defaults
+strategies = c("RB", "WSLS", "SoftmaxTitTat") #, "0-ToM", "1-ToM", "2-ToM", "3-ToM") #not added yet
+ 
+agent_df <- create_agents(strategies, match_up = "RR", prepare_with_defaults = T)
+agent_df
+
+#All competitions in the data_frame
+result_df <- compete_all(agent_df, n_rounds = 30, 
         p_matrix = penny_competitive_matrix)
 
-
-
-player = agent_df$player2
-params = agent_df$params_p2
+#examining results
+result_df
+result_sum <- result_df %>% group_by(player) %>% summarise(total_point = sum(points), mean_choice = mean(choice))
+result_sum
 ```
 
 
