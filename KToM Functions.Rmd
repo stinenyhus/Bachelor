@@ -15,9 +15,12 @@ Bugfix smaller functions
 
 Figure out the dummy. Should be in params. But figure out what it is
 
-Fix the transition from param_mean to params_opponent
 Summing variance - vector/matrix question
 the VBA Elogsig - outputting only one value
+
+Comment where the priors are set
+
+Figure out the details of the param_mean indexing
 
 
 EXTRA
@@ -268,6 +271,12 @@ gradient_update = function(opponent_prev_hidden_states, mean, param_mean, revers
       #but use one of the incremented instead
       param_mean_temp[param] = param_mean_incremented[param] 
       
+      #Make a list for parameters to be inserted
+      opponent_params = list(
+      volatility = param_mean_temp[1], #volatility is the first column in the matrix
+      behavioural_temperature = param_mean_temp[2] #temperature is the second column in the matrix
+      ) 
+      
       #run the learning function of opponent using param_mean_temp as parameter values
       opponent_hidden_states_incremented = rec_learning_function(prev_hidden_states = opponent_prev_hidden_states, 
                                                            params = param_mean_temp, 
@@ -333,10 +342,15 @@ rec_learning_function = function(
       opponent_level = level_index-1
       #Extract the currently simulated opponent's hidden states
       opponent_hidden_states = prev_hidden_states[[level_index]]
+      #Extract the estimated parameters of the current opponent
+      opponent_params = list(
+        volatility = param_mean[level_index, 1], #volatility is the first column in the matrix
+        behavioural_temperature = param_mean[level_index, 2] #temperature is the second column in the matrix
+        ) 
       
       #Simulate opponent learning
       new_opponent_hidden_states = rec_learning_function(prev_hidden_states = opponent_hidden_states,
-                                                     params = param_mean[level_index],
+                                                     params = opponent_params,
                                                      choices = reverse_choices,
                                                      level = opponent_level,
                                                      player = opponent_player,
@@ -344,14 +358,14 @@ rec_learning_function = function(
       
       #Simulate opponent deciding
       mean[level_index] = decision_function(hidden_states = new_opponent_hidden_states,
-                                            params = param_mean[level_index],
+                                            params = opponent_params,
                                             player = opponent_player,
                                             p_matrix = p_matrix)
       
       #Update gradient
-      gradient[level_index] = gradient_update(opponent_prev_hidden_states = opponent_hidden_states,
+      gradient[level_index,] = gradient_update(opponent_prev_hidden_states = opponent_hidden_states,
                                  mean = mean[level_index],
-                                 param_mean = param_mean[level_index],
+                                 param_mean = param_mean[level_index,], #only input the param_mean for the current level
                                  reverse_choices = reverse_choices,
                                  opponent_level = opponent_level,
                                  opponent_player = opponent_player,
@@ -615,7 +629,6 @@ rec_prepare_k_ToM = function(level, priors = "default") {
 #Testing Space
 ```{r}
 test = rec_prepare_k_ToM(level = 3)
-
 
 ```
 
