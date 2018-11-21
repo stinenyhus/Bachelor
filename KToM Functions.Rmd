@@ -15,12 +15,11 @@ Bugfix smaller functions
 
 Figure out the dummy. Should be in params. But figure out what it is
 
-Summing variance - vector/matrix question
 the VBA Elogsig - outputting only one value
 
-Comment where the priors are set
-
 Figure out the details of the param_mean indexing
+
+Consider the "flag for noisy" - which parameter is affected by that ? Why is it a different one than the one being affected by volatility?
 
 
 EXTRA
@@ -195,7 +194,6 @@ update_pk <- function(prev_hidden_states, choices, p_op_1_k_approx){
 #Learning function - updating parameter estimates
 ```{r}
 parameter_variance_update <- function(prev_hidden_states, params, p_k) {
-
   #input
   volatility = params$volatility
   #for each k:
@@ -444,7 +442,7 @@ p_op_1_k_fun <- function(hidden_states){
   a = 0.36 #this number is taken from the matlab code in ObsRecGen
   
   #Prepare variance
-  variance = sum(exp(variance) * gradient^2) #!# how does sum work on a matrix
+  variance = rowSums(exp(variance) * gradient^2) #summing the variances of each parameter (after weighting by gradient). One sum per sophistication level
   
   #calculate opponent's probability of choosing 1
   p_op_1_k = inv.logit(mean / sqrt(1 + a * variance)) 
@@ -564,12 +562,12 @@ rec_prepare_k_ToM = function(level, priors = "default") {
     
     message("No priors specified, using default priors")
     
-    priors <- list(mean_basic = 0, 
-                   variance_basic = 0,
-                   mean = 0,
-                   variance = c(0,0),
-                   param_mean = c(0,0),
-                   gradient = c(0,0)
+    priors <- list(mean_basic = 0, #agnostic
+                   variance_basic = 0, #will be exponated, so exp(0) = 1
+                   mean = 0, #agnostic
+                   variance = c(0,0), #will be exponated, so exp(0) = 1
+                   param_mean = c(0,0), #agnostic
+                   gradient = c(0,0) #is zero. in the Matlab script, one parameter was set to 1 if "flag for noisy" was set
                    )
   }
   
@@ -628,7 +626,6 @@ rec_prepare_k_ToM = function(level, priors = "default") {
 
 #Testing Space
 ```{r}
-test = rec_prepare_k_ToM(level = 3)
-
+test_hidden_states = rec_prepare_k_ToM(level = 3)
 ```
 
