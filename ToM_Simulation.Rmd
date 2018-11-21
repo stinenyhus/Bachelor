@@ -288,57 +288,57 @@ prepare <- function(strategy_string, RB_prop = 0.8){
  
 ###_________________________ General _________________________###
 
-#utility function
-U <- function(a_self, a_op, player, p_matrix){ 
-  #INPUT
-    #a_self: choice of self
-    #a_op: choice of opponnent
-    #player: which side of the payof matrix is used. 0: first player, 1: second player
-    #returns the point reward
-  #OUTPUT
-    #The utility of of the given choices for the player.
-  
-  # get values from payoff matrix for player 1
-  a_1 <- p_matrix$a1_reward[p_matrix$a1_choice == 1 & p_matrix$a2_choice == 1] #value if both choose 1
-  b_1 <- p_matrix$a1_reward[p_matrix$a1_choice == 1 & p_matrix$a2_choice == 0] #value if self chooses 1 and opponent chooses 0
-  c_1 <- p_matrix$a1_reward[p_matrix$a1_choice == 0 & p_matrix$a2_choice == 1] #value if self chooses 0 and opponent chooses 1
-  d_1 <- p_matrix$a1_reward[p_matrix$a1_choice == 0 & p_matrix$a2_choice == 0] #value if both choose 0
-  
-  # get values from payoff matrix for player 2
-  a_2 <- p_matrix$a2_reward[p_matrix$a1_choice == 1 & p_matrix$a2_choice == 1] #value if both choose 1
-  b_2 <- p_matrix$a2_reward[p_matrix$a1_choice == 1 & p_matrix$a2_choice == 0] #value if self chooses 1 and opponent chooses 0
-  c_2 <- p_matrix$a2_reward[p_matrix$a1_choice == 0 & p_matrix$a2_choice == 1] #value if self chooses 0 and opponent chooses 1
-  d_2 <- p_matrix$a2_reward[p_matrix$a1_choice == 0 & p_matrix$a2_choice == 0] #value if both choose 0
-  
-  # calculate reward
-  (1-player) * #for player 1
-    (  a_self * a_op * a_1 +           #if both choose 1 
-       a_self * (1 - a_op) * b_1 +     #if you choose 1 and opponent chooses 0
-       (1 - a_self) * a_op * c_1 +     #if you choose 0 and the opponent chooses 1
-       (1 - a_self) * (1 - a_op) * d_1 #if both choose 0
-       ) + 
-  player * #for player 2
-    (  a_self * a_op * a_2 +           #if both choose 1 
-       a_self * (1 - a_op) * b_2 +     #if you choose 1 and opponent chooses 0
-       (1 - a_self) * a_op * c_2 +     #if you choose 0 and the opponent chooses 1
-       (1 - a_self) * (1 - a_op) * d_2 #if both choose 0
-       )
-}
+# #utility function
+# U <- function(a_self, a_op, player, p_matrix){ 
+#   #INPUT
+#     #a_self: choice of self
+#     #a_op: choice of opponnent
+#     #player: which side of the payof matrix is used. 0: first player, 1: second player
+#     #returns the point reward
+#   #OUTPUT
+#     #The utility of of the given choices for the player.
+#   
+#   # get values from payoff matrix for player 1
+#   a_1 <- p_matrix$a1_reward[p_matrix$a1_choice == 1 & p_matrix$a2_choice == 1] #value if both choose 1
+#   b_1 <- p_matrix$a1_reward[p_matrix$a1_choice == 1 & p_matrix$a2_choice == 0] #value if self chooses 1 and opponent chooses 0
+#   c_1 <- p_matrix$a1_reward[p_matrix$a1_choice == 0 & p_matrix$a2_choice == 1] #value if self chooses 0 and opponent chooses 1
+#   d_1 <- p_matrix$a1_reward[p_matrix$a1_choice == 0 & p_matrix$a2_choice == 0] #value if both choose 0
+#   
+#   # get values from payoff matrix for player 2
+#   a_2 <- p_matrix$a2_reward[p_matrix$a1_choice == 1 & p_matrix$a2_choice == 1] #value if both choose 1
+#   b_2 <- p_matrix$a2_reward[p_matrix$a1_choice == 1 & p_matrix$a2_choice == 0] #value if self chooses 1 and opponent chooses 0
+#   c_2 <- p_matrix$a2_reward[p_matrix$a1_choice == 0 & p_matrix$a2_choice == 1] #value if self chooses 0 and opponent chooses 1
+#   d_2 <- p_matrix$a2_reward[p_matrix$a1_choice == 0 & p_matrix$a2_choice == 0] #value if both choose 0
+#   
+#   # calculate reward
+#   (1-player) * #for player 1
+#     (  a_self * a_op * a_1 +           #if both choose 1 
+#        a_self * (1 - a_op) * b_1 +     #if you choose 1 and opponent chooses 0
+#        (1 - a_self) * a_op * c_1 +     #if you choose 0 and the opponent chooses 1
+#        (1 - a_self) * (1 - a_op) * d_1 #if both choose 0
+#        ) + 
+#   player * #for player 2
+#     (  a_self * a_op * a_2 +           #if both choose 1 
+#        a_self * (1 - a_op) * b_2 +     #if you choose 1 and opponent chooses 0
+#        (1 - a_self) * a_op * c_2 +     #if you choose 0 and the opponent chooses 1
+#        (1 - a_self) * (1 - a_op) * d_2 #if both choose 0
+#        )
+# }
 
-#Expected payoff
-payoff_difference <- function(p_op_1, player, p_matrix){
-  p_op_1*(U(1, 1, player, p_matrix)-U(0, 1, player, p_matrix))+(1-p_op_1)*(U(1, 0, player, p_matrix)-U(0, 0, player, p_matrix))
-}
-
-#softmax functions
-softmax <- function(e_payoff_diff, beta){ 
-  #INPUT
-    # expected payoff difference
-    # a beta also called bahaivoural temperature - higher make the agent choice more random
-  #OUTPUT
-    #Returns the probability self choosing 1
-  1/(1 + exp(-(e_payoff_diff/beta)))
-}
+# #Expected payoff
+# payoff_difference <- function(p_op_1, player, p_matrix){
+#   p_op_1*(U(1, 1, player, p_matrix)-U(0, 1, player, p_matrix))+(1-p_op_1)*(U(1, 0, player, p_matrix)-U(0, 0, player, p_matrix))
+# }
+# 
+# #softmax functions
+# softmax <- function(e_payoff_diff, beta){ 
+#   #INPUT
+#     # expected payoff difference
+#     # a beta also called bahaivoural temperature - higher make the agent choice more random
+#   #OUTPUT
+#     #Returns the probability self choosing 1
+#   1/(1 + exp(-(e_payoff_diff/beta)))
+# }
 
 
 
