@@ -10,11 +10,19 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 #To Do:
-Make a Prepare Function
-Decide on Priors
-Fix all inputs smaller functions
+
 Bugfix smaller functions
-Figure out the dummy. Should be in params. But figure out what it is.
+
+Figure out the dummy. Should be in params. But figure out what it is
+
+Fix the transition from param_mean to params_opponent
+Summing variance - vector/matrix question
+the VBA Elogsig - outputting only one value
+
+
+EXTRA
+Handedness
+Perturb Learning
 
 
 #General functions
@@ -75,6 +83,9 @@ expected_payoff_difference <- function(p_op_1, player, p_matrix) {
 softmax <- function(e_payoff_diff, params){ 
   #Input
   behavioural_temperature = params$behavioural_temperature #the behavioural temperature mkaes the agent explore more
+  
+  #prepare behavioural temperature
+  behavioural_temperature = exp(behavioural_temperature)
   
   #Calculate probability of choosing 1
   p_self_1 = 1 / (1 + exp(-(e_payoff_diff / behavioural_temperature)))
@@ -266,10 +277,9 @@ gradient_update = function(opponent_prev_hidden_states, mean, param_mean, revers
       
       #run the decision function of opponent using the temporary hidden states
       mean_incremented = decision_function(hidden_states = opponent_hidden_states_incremented,
-                                           choices = reverse_choices,
+                                           params = params_mean_temp,
                                            player = opponent_player,
-                                           p_matrix = p_matrix,
-                                           level = opponent_level)
+                                           p_matrix = p_matrix)
       
       #calculate the gradient between parameter increment and probability estimate
       gradient[param] = (mean_incremented - mean)/increment[param]
@@ -321,9 +331,11 @@ rec_learning_function = function(
       
       #Set the simulated opponents level. "level_index" is one higher than the actual level because it isn't possible to index 0
       opponent_level = level_index-1
+      #Extract the currently simulated opponent's hidden states
+      opponent_hidden_states = prev_hidden_states[[level_index]]
       
       #Simulate opponent learning
-      new_hidden_states[[level_index]] = rec_learning_function(prev_hidden_states = prev_hidden_states[[level_index]],
+      new_opponent_hidden_states = rec_learning_function(prev_hidden_states = opponent_hidden_states,
                                                      params = param_mean[level_index],
                                                      choices = reverse_choices,
                                                      level = opponent_level,
@@ -331,28 +343,29 @@ rec_learning_function = function(
                                                      p_matrix = p_matrix) 
       
       #Simulate opponent deciding
-      mean[level_index] = decision_function(hidden_states = new_hidden_states[[level_index]],
-                               choices = reverse_choices,
-                               player = opponent_player,
-                               p_matrix = p_matrix,
-                               level = opponent_level)
+      mean[level_index] = decision_function(hidden_states = new_opponent_hidden_states,
+                                            params = param_mean[level_index],
+                                            player = opponent_player,
+                                            p_matrix = p_matrix)
       
       #Update gradient
-      gradient[level_index] = gradient_update(opponent_prev_hidden_states = prev_hidden_states[[level_index]],
-                                 mean,
-                                 param_mean[level_index],
-                                 reverse_choices,
-                                 opponent_level,
-                                 opponent_player,
-                                 p_matrix)
+      gradient[level_index] = gradient_update(opponent_prev_hidden_states = opponent_hidden_states,
+                                 mean = mean[level_index],
+                                 param_mean = param_mean[level_index],
+                                 reverse_choices = reverse_choices,
+                                 opponent_level = opponent_level,
+                                 opponent_player = opponent_player,
+                                 p_matrix = p_matrix)
+      
+      #Save opponent's new hidden states
+      new_hidden_states[[level_index]] = new_opponent_hidden_states
     }
     
     #Gather own hidden states into one list
     own_hidden_states = list(p_k = p_k, mean = mean, param_mean = param_mean, variance = variance, gradient = gradient)
-    
   }
   
-  #Save updated values to new hidden states
+  #Save own updated hidden states to new hidden states
   new_hidden_states$own_hidden_states = own_hidden_states
   
   return(new_hidden_states)
@@ -362,20 +375,20 @@ rec_learning_function = function(
 #Decision function - 0-ToM opponent probability
 ```{r}
 #Probability of opponnent a_op choosing 1
-basic_p_op_1_fun <- function(own_hidden_states){
+basic_p_op_1_fun <- function(hidden_states){
 
   #THIS IS THE VARIANT USED IN THE MATLAB CODE, WHICH DOES NOT USE VOLATILITY
   
   #for each sophistication level k:
-  mean_basic = own_hidden_states$mean_basic #mean opponent probability estimate VECTOR
-  variance_basic = own_hidden_states$variance_basic #variance of parameter estimates MATRIX
+  mean_basic = hidden_states$own_hidden_states$mean_basic #mean opponent probability estimate VECTOR
+  variance_basic = hidden_states$own_hidden_states$variance_basic #variance of parameter estimates MATRIX
   a = 0.36 #this number is taken from the matlab code in ObsRecGen
   
   #Prepare variance
   variance_basic = exp(variance_basic)
   
   #calculate opponent's probability of choosing 1
-  p_op_1_basic = inv.logit(mean_basic/sqrt(1+a*variance_basic)) 
+  p_op_1_basic = inv.logit(mean_basic / sqrt(1 + a * variance_basic)) 
   
   return(p_op_1_basic)
 }
@@ -407,20 +420,20 @@ basic_p_op_1_fun <- function(own_hidden_states){
 #Decision function - opponent probability
 ```{r}
 #Probability of opponnent a_op choosing 1
-p_op_1_k_fun <- function(own_hidden_states){
+p_op_1_k_fun <- function(hidden_states){
 
   #THIS IS THE VARIANT USED IN THE MATLAB CODE, WHICH DOES NOT USE VOLATILITY
   
   #for each sophistication level k:
-  mean = own_hidden_states$mean #mean opponent probability estimate VECTOR
-  variance = own_hidden_states$variance #variance of parameter estimates MATRIX
+  mean = hidden_states$own_hidden_states$mean #mean opponent probability estimate VECTOR
+  variance = hidden_states$own_hidden_states$variance #variance of parameter estimates MATRIX
   a = 0.36 #this number is taken from the matlab code in ObsRecGen
   
   #Prepare variance
-  variance = sum(exp(variance)*gradient^2)
+  variance = sum(exp(variance) * gradient^2) #!# how does sum work on a matrix
   
   #calculate opponent's probability of choosing 1
-  p_op_1_k = inv.logit(mean/sqrt(1+a*variance)) 
+  p_op_1_k = inv.logit(mean / sqrt(1 + a * variance)) 
   
   return(p_op_1_k)
 }
@@ -456,10 +469,8 @@ p_op_1_k_fun <- function(own_hidden_states){
 decision_function = function(
   hidden_states,
   params,
-  choices,
   player,
-  p_matrix,
-  level
+  p_matrix
 ) { 
   
   if (level == 0) { #If the (simulated) agent is a 0-ToM
@@ -472,8 +483,11 @@ decision_function = function(
     #Calculate opponent probability of choosing 1, for each k
     p_op_1_k = p_op_1_k_fun(hidden_states)
   
+    #extract probabilities for each opponent level
+    p_k = hidden_states$own_hidden_states$p_k
+    
     #Weigh probabilities by corresponding level probabilities, to calculate an aggregate probability of opponent choosing 1
-    p_op_1 = sum(p_op_1_k*p_k)
+    p_op_1 = sum(p_op_1_k * p_k)
   }
   
   #Calculate the expected payoff difference
@@ -496,30 +510,112 @@ k_ToM = function (params, hidden_states, player, p_matrix, choice_self, choice_o
   #bind choices together for easy reorganising
   choices = c(choice_self, choice_op)
   
-  #Update hidden states
-  new_hidden_states = 
-    rec_learning_function(
-      prev_hidden_states,
-      params,
-      choices,
-      level,
-      player,
-      p_matrix)
+  if (is.null(choice_self)){ #If first round or missed trial
+    
+    new_hidden_states = prev_hidden_states #No update
+    
+  } else {
+    
+    #Update hidden states
+     new_hidden_states = 
+      rec_learning_function(
+        prev_hidden_states,
+        params,
+        choices,
+        level,
+        player,
+        p_matrix)
+  }
   
   #Calculate decision probability
   p_self_1 = 
     decision_function(
-      new_hidden_states,
+      hidden_states = new_hidden_states,
       params,
-      choices,
       player,
-      p_matrix,
-      level) 
+      p_matrix) 
   
   #Choose
   choice = rbinom(1, 1, p_self_1)
   
   return(choice, new_hidden_states)
 }
+```
+
+#Preparing hidden states for the k-ToM function
+```{r}
+rec_prepare_k_ToM = function(level, priors = "default") {
+  
+  if (class(priors) != "list"){ #Use default priors if nothing else is specified
+    
+    message("No priors specified, using default priors")
+    
+    priors <- list(mean_basic = 0, 
+                   variance_basic = 0,
+                   mean = 0,
+                   variance = c(0,0),
+                   param_mean = c(0,0),
+                   gradient = c(0,0)
+                   )
+  }
+  
+  #Make empty list for filling with updated values
+  new_hidden_states = NULL
+  
+  if (level == 0) { #If the (simulated) agent is a 0-ToM
+    
+    #Set prior variance on 0-ToM's estimate of opponent choice probability
+    variance_basic = priors$variance_basic
+    #Set prior mean on 0-ToM's estimate of opponent choice probability
+    mean_basic = priors$mean_basic
+    
+    #Gather own hidden states into one list
+    own_hidden_states = list(mean_basic = mean_basic, variance_basic = variance_basic)
+    
+  } else { #If the (simulated) agent is a K-ToM
+    
+    #Set priors, one for each of opponent's possible sophistication level
+    #Probability is agnostic
+    p_k = rep(1, level)/level
+    #Mean of opponent choice probability estimate
+    mean = rep(priors$mean, level)
+    #Variance on parameter estimates
+    variance = t(matrix(rep(priors$variance, level),
+                        nrow = length(priors$variance)))
+    #Mean of parameter estimates
+    param_mean = t(matrix(rep(priors$param_mean, level),
+                          nrow = length(priors$param_mean)))
+    #Gradient
+    gradient = t(matrix(rep(priors$gradient, level),
+                      nrow = length(priors$gradient)))
+    
+    #Gather own hidden states into one list
+    own_hidden_states = list(p_k = p_k, mean = mean, param_mean = param_mean, variance = variance, gradient = gradient)
+      
+    #Now we need to go through each possible opponent's level one at a time. Highest opponent level is 1 lower than own level
+    for (level_index in 1:level) {
+      
+      #Set the simulated opponents level. "level_index" is one higher than the actual level because it isn't possible to index 0
+      opponent_level = level_index-1
+      
+      #Get hidden states from simulated opponents
+      new_hidden_states[[level_index]] = rec_prepare_k_ToM(level = opponent_level,
+                                                           priors) 
+    }
+  }
+  
+  #Save own updated hidden states to new hidden states
+  new_hidden_states$own_hidden_states = own_hidden_states
+  
+  return(new_hidden_states)
+}
+
+```
+
+#Testing Space
+```{r}
+test = rec_prepare_k_ToM(level = 3)
+
+
 ```
 
