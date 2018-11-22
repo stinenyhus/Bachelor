@@ -15,11 +15,15 @@ pacman::p_load(plyr, tidyverse, raster, reshape2, knitr, brms, boot, rethinking,
 
 #Bugfix smaller functions
 
+#Does mean come out of decision function as probability, or in logodds?
+
 #Figure out the dummy. Should be in params. But figure out what it is
 
 #the VBA Elogsig - outputting only one value
 
 #Figure out the details of the param_mean indexing
+
+#Matlab Code: Do the also take the absolute difference when calculating gradient?
 
 #Consider the "flag for noisy" - which parameter is affected by that ? Why is it a different one than the one being affected by volatility?
 
@@ -262,38 +266,41 @@ gradient_update = function(opponent_prev_hidden_states, mean, param_mean, revers
   mean #the mean of opponent probability estimation VECTOR
   param_mean #the mean for each estimated parameter MATRIX
   
-  #increment parameters
-  increment = max(abs(1e-4*param_mean), 1e-4)
-  param_mean_incremented = param_mean + increment
+  #Make empty list for filling in gradients
+  gradient = NULL
   
-  for (param in length(param_mean)) {
+  for (param in 1:length(param_mean)) {
+    
+      #calculate increment
+      increment = max(abs(1e-4*param_mean[param]), 1e-4)
+      
       #use the parameter estimates
-      param_mean_temp = param_mean 
+      param_mean_incremented = param_mean 
       #but use one of the incremented instead
-      param_mean_temp[param] = param_mean_incremented[param] 
+      param_mean_incremented[param] = param_mean[param] + increment
       
       #Make a list for parameters to be inserted
       opponent_params = list(
-      volatility = param_mean_temp[1], #volatility is the first column in the matrix
-      behavioural_temperature = param_mean_temp[2] #temperature is the second column in the matrix
+      volatility = param_mean_incremented[1], #volatility is the first column in the matrix
+      behavioural_temperature = param_mean_incremented[2] #temperature is the second column in the matrix
       ) 
       
       #run the learning function of opponent using param_mean_temp as parameter values
       opponent_hidden_states_incremented = rec_learning_function(prev_hidden_states = opponent_prev_hidden_states, 
-                                                           params = param_mean_temp, 
+                                                           params = opponent_params, 
                                                            choices = reverse_choices,
                                                            level = opponent_level,
                                                            player = opponent_player) 
       
       #run the decision function of opponent using the temporary hidden states
       mean_incremented = decision_function(hidden_states = opponent_hidden_states_incremented,
-                                           params = params_mean_temp,
+                                           params = opponent_params,
                                            player = opponent_player,
                                            level = opponent_level,
                                            p_matrix = p_matrix)
       
       #calculate the gradient between parameter increment and probability estimate
-      gradient[param] = (mean_incremented - mean)/increment[param]
+      gradient[param] = abs((mean_incremented - mean))/increment   #!# Must check with Matlab Code
   }
   
   return(gradient)
@@ -323,18 +330,25 @@ rec_learning_function = function(
     #Gather own hidden states into one list
     own_hidden_states = list(mean_basic = mean_basic, variance_basic = variance_basic)
     
+    print("did 0-ToM")
+    
   } else { #If the (simulated) agent is a K-ToM
   
     #Update p_k
     p_op_1_k_approx = p_op_1_k_approx_fun(prev_hidden_states)
     p_k = update_pk(prev_hidden_states, choices, p_op_1_k_approx)
     
+    print("updated p_k")
+    
     #Update parameter estimates
     variance = parameter_variance_update(prev_hidden_states, params, p_k)
     param_mean = parameter_mean_update(prev_hidden_states, choices, p_k, variance)
     
+    print("updated estimates")
+    
     #Make empty list for filling in new means
     mean = NULL
+    gradient = NULL
     
     #Prepare opponent's perspective
     reverse_choices = choices[2:1]
@@ -360,6 +374,7 @@ rec_learning_function = function(
                                                      level = opponent_level,
                                                      player = opponent_player,
                                                      p_matrix = p_matrix) 
+      print("simulated an opponents learning")
       
       #Simulate opponent deciding
       mean[level_index] = decision_function(hidden_states = new_opponent_hidden_states,
@@ -367,6 +382,7 @@ rec_learning_function = function(
                                             player = opponent_player,
                                             level = opponent_level,
                                             p_matrix = p_matrix)
+      print("simulated an opponents decision")
       
       #Update gradient
       gradient[level_index,] = gradient_update(opponent_prev_hidden_states = opponent_hidden_states,
@@ -377,9 +393,15 @@ rec_learning_function = function(
                                  opponent_player = opponent_player,
                                  p_matrix = p_matrix)
       
+      print("calculated an opponent's gradients")
+      
+      print(gradient)
+      
       #Save opponent's new hidden states
       new_hidden_states[[level_index]] = new_opponent_hidden_states
     }
+    
+    print("finished simulating opponents")
     
     #Gather own hidden states into one list
     own_hidden_states = list(p_k = p_k, mean = mean, param_mean = param_mean, variance = variance, gradient = gradient)
