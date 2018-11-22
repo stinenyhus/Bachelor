@@ -7,24 +7,26 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+pacman::p_load(plyr, tidyverse, raster, reshape2, knitr, brms, boot, rethinking, groupdata2, patchwork) 
 ```
 
 #To Do:
 
-Bugfix smaller functions
+#Bugfix smaller functions
 
-Figure out the dummy. Should be in params. But figure out what it is
+#Figure out the dummy. Should be in params. But figure out what it is
 
-the VBA Elogsig - outputting only one value
+#the VBA Elogsig - outputting only one value
 
-Figure out the details of the param_mean indexing
+#Figure out the details of the param_mean indexing
 
-Consider the "flag for noisy" - which parameter is affected by that ? Why is it a different one than the one being affected by volatility?
+#Consider the "flag for noisy" - which parameter is affected by that ? Why is it a different one than the one being affected by volatility?
 
 
-EXTRA
-Handedness
-Perturb Learning
+#EXTRA
+#Handedness
+#Perturb Learning
 
 
 #General functions
@@ -230,6 +232,7 @@ parameter_mean_update <- function(prev_hidden_states, choices, p_k, variance){
   #for each sophistication level k:
   prev_mean = prev_hidden_states$own_hidden_states$mean #the mean of opponent probability estimation VECTOR
   prev_param_mean = prev_hidden_states$own_hidden_states$param_mean #the mean for each estimated parameter MATRIX
+  prev_gradient = prev_hidden_states$own_hidden_states$gradient #the gradient for each estimated parameter MATRIX
   p_k #the probability of sophistication level k VECTOR
   variance #the variance of each estimated parameter MATRIX
   
@@ -286,6 +289,7 @@ gradient_update = function(opponent_prev_hidden_states, mean, param_mean, revers
       mean_incremented = decision_function(hidden_states = opponent_hidden_states_incremented,
                                            params = params_mean_temp,
                                            player = opponent_player,
+                                           level = opponent_level,
                                            p_matrix = p_matrix)
       
       #calculate the gradient between parameter increment and probability estimate
@@ -329,6 +333,9 @@ rec_learning_function = function(
     variance = parameter_variance_update(prev_hidden_states, params, p_k)
     param_mean = parameter_mean_update(prev_hidden_states, choices, p_k, variance)
     
+    #Make empty list for filling in new means
+    mean = NULL
+    
     #Prepare opponent's perspective
     reverse_choices = choices[2:1]
     opponent_player = 1-player
@@ -358,6 +365,7 @@ rec_learning_function = function(
       mean[level_index] = decision_function(hidden_states = new_opponent_hidden_states,
                                             params = opponent_params,
                                             player = opponent_player,
+                                            level = opponent_level,
                                             p_matrix = p_matrix)
       
       #Update gradient
@@ -482,6 +490,7 @@ decision_function = function(
   hidden_states,
   params,
   player,
+  level,
   p_matrix
 ) { 
   
@@ -545,6 +554,7 @@ k_ToM = function (params, hidden_states, player, level, p_matrix, choice_self, c
       hidden_states = new_hidden_states,
       params,
       player,
+      level,
       p_matrix) 
   
   #Choose
@@ -566,7 +576,7 @@ rec_prepare_k_ToM = function(level, priors = "default") {
                    variance_basic = 0, #will be exponated, so exp(0) = 1
                    mean = 0, #agnostic
                    variance = c(0,0), #will be exponated, so exp(0) = 1
-                   param_mean = c(0,0), #agnostic
+                   param_mean = c(0,0), #not agnostic. These will be exponated efore being used as parameters. Szo this is a prior of exp(0) = 1
                    gradient = c(0,0) #is zero. in the Matlab script, one parameter was set to 1 if "flag for noisy" was set
                    )
   }
@@ -644,6 +654,5 @@ k_ToM (params = params_test,
        p_matrix = penny_competitive_matrix,
        choice_self = 0,
        choice_op = 1)
-
 ```
 
