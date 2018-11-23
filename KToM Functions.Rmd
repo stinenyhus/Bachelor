@@ -1,6 +1,6 @@
 ---
 title: "KToM Function"
-author: "Kenneth, Peter"
+author: "Peter Waade, Kenneth Enevoldsen"
 date: "18/11/2018"
 output: html_document
 editor_options: 
@@ -16,9 +16,10 @@ pacman::p_load(plyr, tidyverse, raster, reshape2, knitr, brms, boot, rethinking,
 #To Do:
 
 #EXTRA
-Handedness
-Perturb Learning
+Handedness/Bias
 Flag for Noisy - making the gradient prior = 1 for bias
+Perturb Learning
+Dilution/forgetting
 
 
 #General functions
