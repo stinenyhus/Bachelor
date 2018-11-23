@@ -15,6 +15,8 @@ pacman::p_load(plyr, tidyverse, raster, reshape2, knitr, brms, boot, rethinking,
 
 #Bugfix smaller functions
 
+#Add names to hidden states
+
 #Does mean come out of decision function as probability, or in logodds?
 
 #Figure out the dummy. Should be in params. But figure out what it is
@@ -346,9 +348,9 @@ rec_learning_function = function(
     
     print("updated estimates")
     
-    #Make empty list for filling in new means
-    mean = NULL
-    gradient = NULL
+    #Make empty structures for filling in new means
+    mean = NULL #is just a vector
+    gradient = matrix(NA, ncol = ncol(param_mean), nrow = level) #An empty matrix with a column for each parameter and a row for each level
     
     #Prepare opponent's perspective
     reverse_choices = choices[2:1]
@@ -356,7 +358,7 @@ rec_learning_function = function(
     
     #Now we need to go through each possible opponent's level one at a time. Highest opponent level is 1 lower than own level
     for (level_index in 1:level) {
-      
+
       #Set the simulated opponents level. "level_index" is one higher than the actual level because it isn't possible to index 0
       opponent_level = level_index-1
       #Extract the currently simulated opponent's hidden states
@@ -382,6 +384,7 @@ rec_learning_function = function(
                                             player = opponent_player,
                                             level = opponent_level,
                                             p_matrix = p_matrix)
+      
       print("simulated an opponents decision")
       
       #Update gradient
@@ -395,8 +398,6 @@ rec_learning_function = function(
       
       print("calculated an opponent's gradients")
       
-      print(gradient)
-      
       #Save opponent's new hidden states
       new_hidden_states[[level_index]] = new_opponent_hidden_states
     }
@@ -409,6 +410,7 @@ rec_learning_function = function(
   
   #Save own updated hidden states to new hidden states
   new_hidden_states$own_hidden_states = own_hidden_states
+  #paste("new_hidden_states$", opponent_level, "_ToM = new_opponent_hidden_states", sep = "")
   
   return(new_hidden_states)
 }
@@ -546,7 +548,15 @@ decision_function = function(
 
 #Full k-ToM function
 ```{r}
-k_ToM = function (params, hidden_states, player, level, p_matrix, choice_self, choice_op, return_hidden_states = T) {
+k_ToM = function (params = "default", hidden_states, player, level, p_matrix, choice_self, choice_op, return_hidden_states = T) {
+  
+  if (class(params) != "list"){ #Use default parameter values if nothing else is specified
+    
+    message("No parameter values specified, using default values")
+    
+    params <- list(behavioural_temperature = -1, # these are the values used in the Matlab script
+                   volatility = -2)
+  }
   
   #the input comes from last round
   prev_hidden_states = hidden_states
