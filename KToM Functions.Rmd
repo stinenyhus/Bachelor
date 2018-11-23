@@ -15,12 +15,10 @@ pacman::p_load(plyr, tidyverse, raster, reshape2, knitr, brms, boot, rethinking,
 
 #To Do:
 
-#Figure out the dummy. Should be in params. But figure out what it is
-
 #EXTRA
-#Handedness
-#Perturb Learning
-#Consider the "flag for noisy" - which parameter is affected by that ? Why is it a different one than the one being affected by volatility?
+Handedness
+Perturb Learning
+Flag for Noisy - making the gradient prior = 1 for bias
 
 
 #General functions
@@ -194,6 +192,7 @@ update_pk <- function(prev_hidden_states, choices, p_op_1_k_approx){
 parameter_variance_update <- function(prev_hidden_states, params, p_k) {
   #input
   volatility = params$volatility
+  volatility_dummy = params$volatility_dummy #dummy parable flags which parameters are affected by volatility
   #for each k:
   prev_param_mean = prev_hidden_states$own_hidden_states$param_mean #the mean for each estimated parameter MATRIX
   prev_variance = prev_hidden_states$own_hidden_states$variance #the uncertainty for each estimated parameter MATRIX
@@ -201,8 +200,7 @@ parameter_variance_update <- function(prev_hidden_states, params, p_k) {
   p_k #the probability of sopistication level k VECTOR
   
   #prepare volatility
-  dummy = c(1,0) #dummy parable flags which parameters are affected by volatility #?# We need to figure out which parameter this is targeting!
-  volatility = exp(volatility)*dummy
+  volatility = exp(volatility)*volatility_dummy
   
   #prepare variance
   prev_variance = exp(prev_variance)
@@ -544,7 +542,9 @@ k_ToM = function (params = "default", hidden_states, player, level, p_matrix, ch
     message("No parameter values specified, using default values")
     
     params <- list(behavioural_temperature = -1, # these are the values used in the Matlab script
-                   volatility = -2)
+                   volatility = -2,
+                   volatility_dummy = c(1,0)  #dummy parable flags which parameters are affected by volatility
+                   )
   }
   
   #the input comes from last round
@@ -677,7 +677,6 @@ penny_competitive_matrix <-
 params_test = list(behavioural_temperature = -1,
               volatility = -2)
 
-
 new_hidden_states_test = k_ToM(params = params_test,
     hidden_states = test_hidden_states,
     player = 1,
@@ -685,7 +684,6 @@ new_hidden_states_test = k_ToM(params = params_test,
     p_matrix = penny_competitive_matrix,
     choice_self = 0,
     choice_op = 1)
-
 
 for(i in 1:20) {
   new_hidden_states_test = k_ToM(params = params_test,
