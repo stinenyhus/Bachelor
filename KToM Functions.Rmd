@@ -1,8 +1,10 @@
 ---
 title: "KToM Function"
-author: "Kenneth, Peter"
+author: "Peter Waade, Kenneth Enevoldsen"
 date: "18/11/2018"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -13,24 +15,11 @@ pacman::p_load(plyr, tidyverse, raster, reshape2, knitr, brms, boot, rethinking,
 
 #To Do:
 
-#Bugfix smaller functions
-
-#Does mean come out of decision function as probability, or in logodds?
-
-#Figure out the dummy. Should be in params. But figure out what it is
-
-#the VBA Elogsig - outputting only one value
-
-#Figure out the details of the param_mean indexing
-
-#Matlab Code: Do the also take the absolute difference when calculating gradient?
-
-#Consider the "flag for noisy" - which parameter is affected by that ? Why is it a different one than the one being affected by volatility?
-
-
 #EXTRA
-#Handedness
-#Perturb Learning
+Handedness/Bias
+Flag for Noisy - making the gradient prior = 1 for bias
+Perturb Learning
+Dilution/forgetting
 
 
 #General functions
@@ -145,7 +134,7 @@ basic_mean_update = function (prev_hidden_states, choices, variance_basic) {
 
 #Learning function - update p(k)
 ```{r}
-p_op_1_k_approx_fun <- function(prev_hidden_states){
+p_op_1_k_approx_fun <- function(prev_hidden_states, level){
   #this calculation uses a semi-analytical approximation by Daunizeau, J. (2017)
   #this is the VBA_Elogsig
   
@@ -162,18 +151,20 @@ p_op_1_k_approx_fun <- function(prev_hidden_states){
   d <- 0.870
   
   #prepare variance
-  prev_variance = exp(prev_variance)*prev_gradient^2
+  prev_variance_prepared = NULL
+  for (level_index in 1:level) {
+    prev_variance_prepared[level_index] = t(exp(prev_variance[level,])) %*% prev_gradient[level,]^2 #!# Must be made more readable with apply
+  }
   
   #calculate estimated probability of opponent choice
   p_op_1_k_approx = 
-   inv.logit((prev_mean + b * prev_variance^c) / sqrt(1 + a * prev_variance^d))
+   inv.logit((prev_mean + b * prev_variance_prepared^c) / sqrt(1 + a * prev_variance_prepared^d))
  
   #log-transform
   p_op_1_k_approx = log(p_op_1_k_approx)
   
   return(p_op_1_k_approx)
 }
-
 
 update_pk <- function(prev_hidden_states, choices, p_op_1_k_approx){
   #input
@@ -202,6 +193,7 @@ update_pk <- function(prev_hidden_states, choices, p_op_1_k_approx){
 parameter_variance_update <- function(prev_hidden_states, params, p_k) {
   #input
   volatility = params$volatility
+  volatility_dummy = params$volatility_dummy #dummy parable flags which parameters are affected by volatility
   #for each k:
   prev_param_mean = prev_hidden_states$own_hidden_states$param_mean #the mean for each estimated parameter MATRIX
   prev_variance = prev_hidden_states$own_hidden_states$variance #the uncertainty for each estimated parameter MATRIX
@@ -209,8 +201,7 @@ parameter_variance_update <- function(prev_hidden_states, params, p_k) {
   p_k #the probability of sopistication level k VECTOR
   
   #prepare volatility
-  dummy = c(1,0,0) #dummy parable flags which parameters are affected by volatility #?# We need to figure out which parameter this is targeting!
-  volatility = exp(volatility)*dummy
+  volatility = exp(volatility)*volatility_dummy
   
   #prepare variance
   prev_variance = exp(prev_variance)
@@ -257,7 +248,7 @@ parameter_mean_update <- function(prev_hidden_states, choices, p_k, variance){
 
 #Learning function - updating gradient
 ```{r}
-gradient_update = function(opponent_prev_hidden_states, mean, param_mean, reverse_choices, opponent_level, opponent_player, p_matrix) {
+gradient_update = function(opponent_prev_hidden_states, mean, param_mean, reverse_choices, opponent_level, opponent_player, p_matrix.) {
   #input
   opponent_prev_hidden_states #opponent's hidden states, for running the learning function
   reverse_choices #opponent's perspective
@@ -290,17 +281,18 @@ gradient_update = function(opponent_prev_hidden_states, mean, param_mean, revers
                                                            params = opponent_params, 
                                                            choices = reverse_choices,
                                                            level = opponent_level,
-                                                           player = opponent_player) 
+                                                           player = opponent_player,
+                                                           p_matrix = p_matrix.) 
       
       #run the decision function of opponent using the temporary hidden states
       mean_incremented = decision_function(hidden_states = opponent_hidden_states_incremented,
                                            params = opponent_params,
                                            player = opponent_player,
                                            level = opponent_level,
-                                           p_matrix = p_matrix)
+                                           p_matrix = p_matrix.)
       
       #calculate the gradient between parameter increment and probability estimate
-      gradient[param] = abs((mean_incremented - mean))/increment   #!# Must check with Matlab Code
+      gradient[param] = (mean_incremented - mean)/increment
   }
   
   return(gradient)
@@ -317,6 +309,10 @@ rec_learning_function = function(
   player,
   p_matrix
 ) {
+  
+  #p_matrix is stored under another name, to avoid recursion-related errors
+  p_matrix. = p_matrix
+  
   #Make empty list for filling with updated values
   new_hidden_states = list()
   
@@ -330,25 +326,19 @@ rec_learning_function = function(
     #Gather own hidden states into one list
     own_hidden_states = list(mean_basic = mean_basic, variance_basic = variance_basic)
     
-    print("did 0-ToM")
-    
   } else { #If the (simulated) agent is a K-ToM
   
     #Update p_k
-    p_op_1_k_approx = p_op_1_k_approx_fun(prev_hidden_states)
+    p_op_1_k_approx <- p_op_1_k_approx_fun(prev_hidden_states, level)
     p_k = update_pk(prev_hidden_states, choices, p_op_1_k_approx)
-    
-    print("updated p_k")
     
     #Update parameter estimates
     variance = parameter_variance_update(prev_hidden_states, params, p_k)
     param_mean = parameter_mean_update(prev_hidden_states, choices, p_k, variance)
     
-    print("updated estimates")
-    
-    #Make empty list for filling in new means
+    #Make empty structures for filling in new means
     mean = NULL
-    gradient = NULL
+    gradient = matrix(NA, ncol = ncol(param_mean), nrow = level) #An empty matrix with a column for each parameter and a row for each level
     
     #Prepare opponent's perspective
     reverse_choices = choices[2:1]
@@ -373,16 +363,14 @@ rec_learning_function = function(
                                                      choices = reverse_choices,
                                                      level = opponent_level,
                                                      player = opponent_player,
-                                                     p_matrix = p_matrix) 
-      print("simulated an opponents learning")
+                                                     p_matrix = p_matrix.) 
       
       #Simulate opponent deciding
       mean[level_index] = decision_function(hidden_states = new_opponent_hidden_states,
                                             params = opponent_params,
                                             player = opponent_player,
                                             level = opponent_level,
-                                            p_matrix = p_matrix)
-      print("simulated an opponents decision")
+                                            p_matrix = p_matrix.)
       
       #Update gradient
       gradient[level_index,] = gradient_update(opponent_prev_hidden_states = opponent_hidden_states,
@@ -391,17 +379,15 @@ rec_learning_function = function(
                                  reverse_choices = reverse_choices,
                                  opponent_level = opponent_level,
                                  opponent_player = opponent_player,
-                                 p_matrix = p_matrix)
+                                 p_matrix. = p_matrix.)
       
-      print("calculated an opponent's gradients")
-      
-      print(gradient)
-      
-      #Save opponent's new hidden states
-      new_hidden_states[[level_index]] = new_opponent_hidden_states
+      #Save opponent's hidden states in the list structure. Name it k-ToM
+      eval(parse(text = paste(
+        "new_hidden_states$ToM_", 
+        opponent_level,
+        " = new_opponent_hidden_states",
+        sep = "")))
     }
-    
-    print("finished simulating opponents")
     
     #Gather own hidden states into one list
     own_hidden_states = list(p_k = p_k, mean = mean, param_mean = param_mean, variance = variance, gradient = gradient)
@@ -469,6 +455,7 @@ p_op_1_k_fun <- function(hidden_states){
   #for each sophistication level k:
   mean = hidden_states$own_hidden_states$mean #mean opponent probability estimate VECTOR
   variance = hidden_states$own_hidden_states$variance #variance of parameter estimates MATRIX
+  gradient = hidden_states$own_hidden_states$gradient
   a = 0.36 #this number is taken from the matlab code in ObsRecGen
   
   #Prepare variance
@@ -539,6 +526,9 @@ decision_function = function(
   #Put into the softmax function to calculate the probability of choosing 1
   p_self_1 = softmax(e_payoff_dif, params)
   
+  #Make into logodds
+  p_self_1 = logit(p_self_1)
+  
   return(p_self_1)
   }
 
@@ -546,7 +536,17 @@ decision_function = function(
 
 #Full k-ToM function
 ```{r}
-k_ToM = function (params, hidden_states, player, level, p_matrix, choice_self, choice_op, return_hidden_states = T) {
+k_ToM = function (params = "default", hidden_states, player, level, p_matrix, choice_self, choice_op, return_hidden_states = T) {
+  
+  if (class(params) != "list"){ #Use default parameter values if nothing else is specified
+    
+    message("No parameter values specified, using default values")
+    
+    params <- list(behavioural_temperature = -1, # these are the values used in the Matlab script
+                   volatility = -2,
+                   volatility_dummy = c(1,0)  #dummy parable flags which parameters are affected by volatility
+                   )
+  }
   
   #the input comes from last round
   prev_hidden_states = hidden_states
@@ -579,10 +579,13 @@ k_ToM = function (params, hidden_states, player, level, p_matrix, choice_self, c
       level,
       p_matrix) 
   
+  #Make logodds into probability
+  p_self_1 = inv.logit(p_self_1)
+  
   #Choose
   choice = rbinom(1, 1, p_self_1)
   
-  return(choice, new_hidden_states)
+  return(list(choice, new_hidden_states))
 }
 ```
 
@@ -643,8 +646,14 @@ rec_prepare_k_ToM = function(level, priors = "default") {
       opponent_level = level_index-1
       
       #Get hidden states from simulated opponents
-      new_hidden_states[[level_index]] = rec_prepare_k_ToM(level = opponent_level,
-                                                           priors) 
+      new_opponent_hidden_states = rec_prepare_k_ToM(level = opponent_level, priors) 
+      
+      #Save opponent's hidden states in the list structure. Name it k-ToM
+      eval(parse(text = paste(
+        "new_hidden_states$ToM_",
+        opponent_level,
+        " = new_opponent_hidden_states",
+        sep = "")))
     }
   }
   
@@ -669,12 +678,24 @@ penny_competitive_matrix <-
 params_test = list(behavioural_temperature = -1,
               volatility = -2)
 
-k_ToM (params = params_test,
-       hidden_states = test_hidden_states,
-       player = 1,
-       level = 3,
-       p_matrix = penny_competitive_matrix,
-       choice_self = 0,
-       choice_op = 1)
+new_hidden_states_test = k_ToM(params = params_test,
+    hidden_states = test_hidden_states,
+    player = 1,
+    level = 3,
+    p_matrix = penny_competitive_matrix,
+    choice_self = 0,
+    choice_op = 1)
+
+for(i in 1:20) {
+  new_hidden_states_test = k_ToM(params = params_test,
+      hidden_states = new_hidden_states_test[[2]],
+      player = 1,
+      level = 3,
+      p_matrix = penny_competitive_matrix,
+      choice_self = new_hidden_states_test[[1]],
+      choice_op = 1)
+}
+
+new_hidden_states_test[[2]]
 ```
 

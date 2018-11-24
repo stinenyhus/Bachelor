@@ -435,7 +435,8 @@ WSLS <- function(ID, player, p_matrix, last_round,
   #OUTPUT
     #Choice: 0 or 1
   
-  noise <- params$WSLS$noise #get the noise parameter #!# MAKE IT SLOPE PARAMETER INSTEAD, ONE FOR LOOSING AND ONE FOR WINNING
+  temperature_win <- params$WSLS$temperature_win
+  temperature_loose <- params$WSLS$temperature_loose
   gain = last_round$points[last_round$ID == ID] #agent's gain last round
   mean_gain = (1 - player) * mean(p_matrix$a1_reward) + player * mean(p_matrix$a2_reward) # above mean gain: win, below mean gain: loss
   max_gain = (1 - player) * max(p_matrix$a1_reward) + player * max(p_matrix$a2_reward) # maximum possible gain
@@ -452,14 +453,14 @@ WSLS <- function(ID, player, p_matrix, last_round,
   } else {
     if (gain - mean_gain > 0) { #if the player won last round
     
-      # Input gain relative to maximum gain in a logistic function. Lower noise param randomizes. When noise->infinite the agent always stays if above mean score.
-      probability_stay = 1 / (1 + exp(-noise * (gain/max_gain - mean_gain))) 
+      # Input gain relative to maximum gain in a logistic function. Lower noise param randomizes. 
+      probability_stay = 1 / (1 + exp(-(gain/max_gain - mean_gain/max_gain)/temperature_win))  #When temperature->0, the agent always stays if above mean score.
       stay = rbinom(1, 1, prob = probability_stay) #whether the agent stays
     
     } else { #if the player lost last round. if gain = mean_gain, probability will be 0.5
       
       #Input gain relative to 
-      probability_switch = 1 / (1 + exp(-noise * (min_gain/gain  - mean_gain)))
+      probability_switch = 1 / (1 + exp(-(min_gain/gain  - min_gain/mean_gain)/temperature_loose)) #When temperature->0, the agent always switches if below mean score.
       stay = rbinom(1, 1, prob = 1 - probability_switch) #whether the agent stays
     } 
     
