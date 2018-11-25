@@ -7,21 +7,23 @@ editor_options:
   chunk_output_type: console
 ---
 
-#Need to do:
+#Very Nice to do:
+  - Handedness/Bias
+  - PLOTS!
+  - Add standard deviations to parameter sampling of volatility and temperature - how to limit it to proper values (not negative)
+  - Add I.D. to compete_all function
+  - Do multiple simulations
+  - Save in compete function should be a list operation
+
 #Nice to do:
-  Handedness/Bias
-  Flag for Noisy - making the gradient prior = 1 for bias
-  Perturb Learning
-  Dilution/forgetting
-  Add output/input/function (e.g. what it does) to all functions
-  fiks naming på k eller level (måske k_level?)
-  add "(Not an error)" to messages which might be misconstrued as an error message
-  add the recursive preperation function to be applied at default if not specified to the k_tom function
-  replace '=' with '<-' when saving variables
-  test whether the compete function works without hidden states specified
-  PLOTS!
-  Save i compete function skal være til en list operation
-  Add standard deviations to parameter sampling of volatility and temperature - how to limit it to proper values (not negative)
+  - Flag for Noisy - making the gradient prior = 1 for bias
+  - Perturb Learning
+  - Dilution/forgetting
+  - Add output/input/function (e.g. what it does) to all functions
+  - add "(Not an error)" to messages which might be misconstrued as an error message
+  - add the recursive preperation function to be applied at default if not specified to the k_tom function
+  - replace '=' with '<-' when saving variables
+  - test whether the compete function works without hidden states specified
 
 #Done (this is just so we can see some progress)
   change the compete function so it does not input as a double list - should just input as a list (if this is changed RB, WSLS and softmax tittat should also be changed)
@@ -70,11 +72,6 @@ prisoner_matrix <-
              a1_reward = c(2, 3, -1, 0), 
              a2_reward = c(2, -1, 3, 0))
 ```
-
-###____________________________________________________________________________________________________________________###
-###________________________________________________ DEFINING FUNCTIONS ________________________________________________###
-###____________________________________________________________________________________________________________________###
-
 #General functions
 ```{r general functions}
 #Utility function
@@ -928,7 +925,7 @@ prepare <- function(strategy_string,
                              switch_mean = 0.9,
                              switch_sd = 0.1),
                     TFT= c(temperature_mean = -1,
-                           temperature_sd = 0.2),
+                           temperature_sd = 0),
                     k_ToM = c(volatility_mean = -2,
                               volatility_sd = 0,
                               temperature_mean = -1,
@@ -1169,35 +1166,17 @@ compete <- function(player1, player2, p1_params, p2_params, p1_hidden_states = N
   return(result_df)
 }
 ```
-
-
-###____________________________________________________________________________________________________________________###
-###____________________________________________________ SIMULATION ____________________________________________________###
-###____________________________________________________________________________________________________________________###
-
 #Simulation
 ```{r simulation} 
 
-strategies_unprep = c("RB", "WSLS", "SoftmaxTitTat", "0-ToM", "1-ToM", "2-ToM")
-
+strategies_unprep = c("RB", "WSLS", "SoftmaxTitTat", "0-ToM", "1-ToM", "2-ToM", "3-ToM", "7-ToM")
 
 agent_df <- create_agents(strategies_unprep, match_up = "RR", prepare_with_defaults = T)
 agent_df
 
 #All competitions in the data_frame
-result_df <- compete_all(agent_df, n_rounds = 100, 
+result_df <- compete_all(agent_df, n_rounds = 200, 
         p_matrix = penny_competitive_matrix)
-
-# #A single series competition
-# result_df <- compete(player1 = agent_df$player1,
-#               player2 = agent_df$player2,
-#               p1_params = agent_df$params_p1,
-#               p2_params = agent_df$params_p2,
-#               p1_hidden_states = agent_df$hidden_states_p1,
-#               p2_hidden_states = agent_df$hidden_states_p2,
-#               p_matrix = penny_competitive_matrix, #penny_competitive_matrix #prisoner_matrix
-#               n_rounds = 100
-#               )
 
 #examining results
 result_df
@@ -1232,6 +1211,20 @@ plot(seq(length(hidden_states)), #the trials
 beepr::beep(4)
 ```
 
+#Unused Code
+```{r}
+# #A single series competition
+# result_df <- compete(player1 = agent_df$player1,
+#               player2 = agent_df$player2,
+#               p1_params = agent_df$params_p1,
+#               p2_params = agent_df$params_p2,
+#               p1_hidden_states = agent_df$hidden_states_p1,
+#               p2_hidden_states = agent_df$hidden_states_p2,
+#               p_matrix = penny_competitive_matrix, #penny_competitive_matrix #prisoner_matrix
+#               n_rounds = 100
+#               )
+
+```
 
 
 
