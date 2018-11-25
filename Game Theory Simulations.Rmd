@@ -998,56 +998,34 @@ RB <- function(params, hidden_states = NULL, player = NULL, p_matrix = NULL, cho
 }
 
 ###Win-Stay-Loose-Switch #!# fiks!
-WSLS <- function(params, hidden_states = NULL,  player, p_matrix, choice_self, choice_op, return_hidden_states = F){
-  #WSLS: Win stay loose switch
-  #INPUT
-    #ID: the ID of the agent
-    #round_result: the result of the last round
-    #params: a list of 1 element: noise
-  #OUTPUT
-    #Choice: 0 or 1
+WSLS <- function(params, hidden_states = NULL, player, p_matrix, choice_self, choice_op, return_hidden_states = F){
+  #WSLS: Win-stay-loose-switch
   
-  if (is.null(choice_op)) { #initial round or missed trial
-    choice <- rbinom(1, 1, prob = 0.5) #make a random choice
-  } else {
-    noise <- params[[1]]$noise #get the noise parameter #?!# MAKE IT SLOPE PARAMETER INSTEAD, ONE FOR LOOSING AND ONE FOR WINNING
-    gain = p_matrix[p_matrix$a1_choice == choice_self ]
-      last_round$points[last_round$ID == ID] #agent's gain last round
-    mean_gain = (1 - player) * mean(p_matrix$a1_reward) + player * mean(p_matrix$a2_reward) # above mean gain: win, below mean gain: loss
-    max_gain = (1 - player) * max(p_matrix$a1_reward) + player * max(p_matrix$a2_reward) # maximum possible gain
-    min_gain = (1 - player) * min(p_matrix$a1_reward) + player * min(p_matrix$a2_reward) # minimum possible gain
-    
-    #Add the minimum value to all values to avoid negatives. Add 1 to all values to avoid 0's. Has no effect on the outcomes.
-    gain = 1 + gain + min_gain
-    mean_gain = 1 + mean_gain + min_gain
-    max_gain = 1 + max_gain + min_gain
-    min_gain = 1 + min_gain + min_gain
+  #Read in parameters
+  stay_prob = params$WSLS_stay_prob
+  switch_prob = params$WSLS_switch_prob
+  #Read in score from last round
+  prev_reward = p_matrix[p_matrix$a1_choice == choice_self]
   
-    if (gain - mean_gain > 0) { #if the player won last round
+  #Calculate the mean of all possible rewards for current player
+  mean_reward = (1 - player) * mean(p_matrix$a1_reward) + player * mean(p_matrix$a2_reward)
+  
+  #Calculate choice
+  if (prev_reward > mean_reward) { #if the agent won, i.e. got more than mean amount of points
+    stay = rbinom(1, 1, stay_prob) #decide whether agent stays
+    choice = stay * choice_self + (1-stay) * (1-choice_self) #staying -> same choice as last
     
-      # Input gain relative to maximum gain in a logistic function. Lower noise param randomizes. When noise->infinite the agent always stays if above mean score.
-      probability_stay = 1 / (1 + exp(-noise * (gain/max_gain - mean_gain))) 
-      stay = rbinom(1, 1, prob = probability_stay) #whether the agent stays
+  } else if (prev_reward < mean_reward) { #if the agent lost, i.e. got less than mean score
+    switch = rbinom(1, 1, switch_prob) #decide whether agent switches
+    choice = switch * (1-choice_self) + (1-switch) * choice_self #switching -> opposite choice of last
     
-    } else { #if the player lost last round. if gain = mean_gain, probability will be 0.5
-      
-      #Input gain relative to 
-      probability_switch = 1 / (1 + exp(-noise * (min_gain/gain  - mean_gain)))
-      stay = rbinom(1, 1, prob = 1 - probability_switch) #whether the agent stays
-    } 
-    
-  choice <-
-    last_round$choice[last_round$ID == ID] * stay + #if staying equals last choice
-    (1 - last_round$choice[last_round$ID == ID]) * (1 - stay) #if not staying equals opposite of last choice
+  } else if (prev_reward == mean_reward) { #if the agent got mean score
+    choice = rbinom(1, 1, 0.5) #make random choice
   }
   
-  if (return_hidden_states == T){
-    return_hidden_states <- return_hidden_states #does not update params
-    return(list(choice = choice, hidden_states = hidden_states))
-  } else {
-    return(choice)
-  }
+  return(choice)
 }
+  
 
 ### Softmax Tit for Tat
 SoftmaxTitTat <- function(params, hidden_states = NULL, player, p_matrix, choice_self = NULL, choice_op, return_hidden_states = F){  
