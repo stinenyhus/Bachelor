@@ -9,7 +9,7 @@ editor_options:
 
 #Need to do:
   fix #!#
-  fix WSLS
+  fix WSLS (softmax)-Tittat
 
 #Nice to do:
   Handedness/Bias
@@ -23,6 +23,7 @@ editor_options:
   add the recursive preperation function to be applied at default if not specified to the k_tom function
   replace '=' with '<-' when saving variables
   test whether the compete function works without hidden states specified
+  ordn prepare
 
 #Done (this is just so we can see some progress)
   change the compete function so it does not input as a double list - should just input as a list (if this is changed RB, WSLS and softmax tittat should also be changed)
@@ -857,7 +858,7 @@ prepare_k_ToM <- function(k, priors = "default", params = "default"){
 
 #Prepare agents functions
 ```{r prepare}
-prepare <- function(strategy_string, RB_prop = 0.5){  
+prepare <- function(strategy_string, prop = 0.5){   
   #INPUT
     #strategy_string: A string of the strategy the agents should apply
     #rb_prop: - #
@@ -1266,7 +1267,9 @@ result_sum
 
 ```{r beep}
 beepr::beep(4)
+
 ```
+
 
 
 
