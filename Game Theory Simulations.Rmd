@@ -14,6 +14,11 @@ editor_options:
   - Add I.D. to compete_all function
   - Do multiple simulations
   - Save in compete function should be a list operation
+  - Add a reinforcement learning agent
+  - Add a simple Tit for Tat agent
+  - Consider if we can use the decision functions using volatility (see if the 1=0.36 works with other volatility values)
+  - Consider if we can save p_op_1_k and use that instead of p_op_1_k_approx
+  - Make a mode where we can play against the agent
 
 #Nice to do:
   - Flag for Noisy - making the gradient prior = 1 for bias
@@ -22,7 +27,6 @@ editor_options:
   - Add output/input/function (e.g. what it does) to all functions
   - add "(Not an error)" to messages which might be misconstrued as an error message
   - add the recursive preperation function to be applied at default if not specified to the k_tom function
-  - replace '=' with '<-' when saving variables
   - test whether the compete function works without hidden states specified
 
 #Done (this is just so we can see some progress)
@@ -35,42 +39,86 @@ editor_options:
 #^the above argument prevents the mulitple 'unknown column' warnings (harmless warnings)
 knitr::opts_chunk$set(echo = TRUE)
 #devtools::install_github("thomasp85/patchwork")
-pacman::p_load(plyr, tidyverse, raster, reshape2, knitr, brms, boot, rethinking, groupdata2, patchwork)
+pacman::p_load(plyr, tidyverse, raster, reshape2, knitr, brms, boot, rethinking, groupdatp2, patchwork)
 ```
 
-#Payoff matrices
+#Function for fetching payoff-matrices
 ```{r payoff matrix}  
-### Payoff matrices for different games ###
+fetch_p_matrix <-  function(game, custom = c(0,0,0,0,0,0,0,0)) {
+  if (game == "staghunt") {
+  p_matrix <-
+  data_frame(
+    p1_choice = c(1, 0, 1, 0),
+    p2_choice = c(1, 1, 0, 0),
+    p1_reward = c(5, 3, 0, 3),
+    p2_reward = c(5, 0, 3, 3))
+  return(p_matrix)
+  
+  } else if (game == "penny_cooperative") {
+  p_matrix <-
+  data_frame(
+    p1_choice = c(1,  0,  1, 0),
+    p2_choice = c(1,  1,  0, 0),
+    p1_reward = c(1, -1, -1, 1),
+    p2_reward = c(1, -1, -1, 1))
+  return(p_matrix)
+  
+  } else if (game == "penny_competitive") {
+  p_matrix <-
+  data_frame(
+    p1_choice = c( 1,  0,  1,  0),
+    p2_choice = c( 1,  1,  0,  0),
+    p1_reward = c(-1,  1,  1, -1),
+    p2_reward = c( 1, -1, -1,  1))
+  return(p_matrix)
+  
+  } else if (game == "prisoners_dilemma") {
+  p_matrix <-
+  data_frame(
+    p1_choice = c(1, 0, 1, 0),
+    p2_choice = c(1, 1, 0, 0),
+    p1_reward = c(2, 3,-1, 0),
+    p2_reward = c(2,-1, 3, 0))
+  return(p_matrix)
+  
+  } else if (game == "party") {
+  p_matrix <-
+  data_frame(
+    p1_choice = c(1,  0, 1, 0),
+    p2_choice = c(1,  1, 0, 0),
+    p1_reward = c(10, 0, 0, 5),
+    p2_reward = c(10, 0, 0, 5))
+  return(p_matrix)
+  
+  } else if (game == "sexes") {
+  p_matrix <-
+  data_frame(
+    p1_choice = c(1,  0, 1, 0),
+    p2_choice = c(1,  1, 0, 0),
+    p1_reward = c(5,  0, 0, 10),
+    p2_reward = c(10, 0, 0, 5))
+  return(p_matrix)
+  
+  } else if (game == "chicken") {
+  p_matrix <-
+  data_frame(
+    p1_choice = c(1,  0,  1,  0),
+    p2_choice = c(1,  1,  0,  0),
+    p1_reward = c(0, -1,  1, -1000),
+    p2_reward = c(0,  1, -1, -1000))
+  return(p_matrix)
+  
+  } else if (game == "custom") {
+  p_matrix <-
+  data_frame(  
+    p1_choice = c(1,          0,         1,         0),
+    p2_choice = c(1,          1,         0,         0),
+    p1_reward = c(custom[1], custom[3],  custom[5], custom[7]),
+    p2_reward = c(custom[2], custom[4],  custom[6], custom[8]))
+  return(p_matrix)
+  }
+}
 
-custom_matrix <-
-  data_frame(a1_choice = c(1, 0, 1, 0), 
-             a2_choice = c(1, 1, 0, 0), 
-             a1_reward = c(0, 0, 0, 0), 
-             a2_reward = c(0, 0, 0, 0))
-
-staghunt_matrix <-
-  data_frame(a1_choice = c(1, 0, 1, 0), 
-             a2_choice = c(1, 1, 0, 0), 
-             a1_reward = c(5, 3, 0, 3), 
-             a2_reward = c(5, 0, 3, 3))
- 
-penny_cooperative_matrix <- 
-  data_frame(a1_choice = c(1, 0, 1, 0), 
-             a2_choice = c(1, 1, 0, 0), 
-             a1_reward = c(1, 0, 0, 1), 
-             a2_reward = c(1, 0, 0, 1))
-
-penny_competitive_matrix <- 
-  data_frame(a1_choice = c(1, 0, 1, 0), 
-             a2_choice = c(1, 1, 0, 0), 
-             a1_reward = c(-1, 1, 1, -1), 
-             a2_reward = c(1, -1, -1, 1))
-
-prisoner_matrix <- 
-  data_frame(a1_choice = c(1, 0, 1, 0), 
-             a2_choice = c(1, 1, 0, 0), 
-             a1_reward = c(2, 3, -1, 0), 
-             a2_reward = c(2, -1, 3, 0))
 ```
 #General functions
 ```{r general functions}
@@ -85,19 +133,19 @@ U <- function(c_self, c_op, player, p_matrix){
     #The utility of of the given choices for the player.
   
   # get values from payoff matrix for player 1
-  a_1 <- p_matrix$a1_reward[p_matrix$a1_choice == 1 & p_matrix$a2_choice == 1] #value if both choose 1
-  b_1 <- p_matrix$a1_reward[p_matrix$a1_choice == 1 & p_matrix$a2_choice == 0] #value if self chooses 1 and opponent chooses 0
-  c_1 <- p_matrix$a1_reward[p_matrix$a1_choice == 0 & p_matrix$a2_choice == 1] #value if self chooses 0 and opponent chooses 1
-  d_1 <- p_matrix$a1_reward[p_matrix$a1_choice == 0 & p_matrix$a2_choice == 0] #value if both choose 0
+  a_1 <- p_matrix$p1_reward[p_matrix$p1_choice == 1 & p_matrix$p2_choice == 1] #value if both choose 1
+  b_1 <- p_matrix$p1_reward[p_matrix$p1_choice == 1 & p_matrix$p2_choice == 0] #value if self chooses 1 and opponent chooses 0
+  c_1 <- p_matrix$p1_reward[p_matrix$p1_choice == 0 & p_matrix$p2_choice == 1] #value if self chooses 0 and opponent chooses 1
+  d_1 <- p_matrix$p1_reward[p_matrix$p1_choice == 0 & p_matrix$p2_choice == 0] #value if both choose 0
   
   # get values from payoff matrix for player 2
-  a_2 <- p_matrix$a2_reward[p_matrix$a1_choice == 1 & p_matrix$a2_choice == 1] #value if both choose 1
-  b_2 <- p_matrix$a2_reward[p_matrix$a1_choice == 0 & p_matrix$a2_choice == 1] #value if self chooses 1 and opponent chooses 0
-  c_2 <- p_matrix$a2_reward[p_matrix$a1_choice == 1 & p_matrix$a2_choice == 0] #value if self chooses 0 and opponent chooses 1
-  d_2 <- p_matrix$a2_reward[p_matrix$a1_choice == 0 & p_matrix$a2_choice == 0] #value if both choose 0
+  a_2 <- p_matrix$p2_reward[p_matrix$p1_choice == 1 & p_matrix$p2_choice == 1] #value if both choose 1
+  b_2 <- p_matrix$p2_reward[p_matrix$p1_choice == 0 & p_matrix$p2_choice == 1] #value if self chooses 1 and opponent chooses 0
+  c_2 <- p_matrix$p2_reward[p_matrix$p1_choice == 1 & p_matrix$p2_choice == 0] #value if self chooses 0 and opponent chooses 1
+  d_2 <- p_matrix$p2_reward[p_matrix$p1_choice == 0 & p_matrix$p2_choice == 0] #value if both choose 0
   
   # calculate reward
-  reward = 
+  reward <- 
     (1-player) * #for player 1
       (c_self * c_op * a_1 +           #if both choose 1 
        c_self * (1 - c_op) * b_1 +     #if you choose 1 and opponent chooses 0
@@ -117,23 +165,27 @@ U <- function(c_self, c_op, player, p_matrix){
 #Expected payoff
 expected_payoff_difference <- function(p_op_1, player, p_matrix) {
   
-  e_payoff_dif = 
+  e_payoff_dif <- 
     p_op_1 * (U(1, 1, player, p_matrix) - U(0, 1, player, p_matrix)) +
     (1 - p_op_1) * (U(1, 0, player, p_matrix) - U(0, 0, player, p_matrix))
   
   return(e_payoff_dif)
 }
 
-
 #Softmax function
 softmax <- function(e_payoff_diff, behavioural_temperature){
   #Input
   
   #prepare behavioural temperature
-  behavioural_temperature = exp(behavioural_temperature)
+  behavioural_temperature <- exp(behavioural_temperature)
   
   #Calculate probability of choosing 1
-  p_self_1 = 1 / (1 + exp(-(e_payoff_diff / behavioural_temperature)))
+  p_self_1 <- 1 / (1 + exp(-(e_payoff_diff / behavioural_temperature)))
+  
+  #Make an upper bound on softmax's output to avoid getting infinite values when transforming to logodds
+  if (p_self_1 > 0.999) {
+    p_self_1 = 0.999
+  }
   
   return(p_self_1)
 }
@@ -165,29 +217,29 @@ WSLS <- function(params, hidden_states = NULL, player, p_matrix, choice_self, ch
   #WSLS: Win-stay-loose-switch
   
   if (is.null(choice_op)) { #initial round or missed trial
-        choice = rbinom(1, 1, 0.5) #make random choice
+        choice <- rbinom(1, 1, 0.5) #make random choice
   } else {
   
     #Read in parameters
-    stay_prob = params$stay_prob
-    switch_prob = params$switch_prob
+    stay_prob <- params$stay_prob
+    switch_prob <- params$switch_prob
     #Read in score from last round
-    prev_reward = U(choice_self, choice_op, player, p_matrix)
+    prev_reward <- U(choice_self, choice_op, player, p_matrix)
   
     #Calculate the mean of all possible rewards for current player
-    mean_reward = (1 - player) * mean(p_matrix$a1_reward) + player * mean(p_matrix$a2_reward)
+    mean_reward <- (1 - player) * mean(p_matrix$p1_reward) + player * mean(p_matrix$p2_reward)
     
     #Calculate choice
     if (prev_reward > mean_reward) { #if the agent won, i.e. got more than mean amount of points
-      stay = rbinom(1, 1, stay_prob) #decide whether agent stays
-      choice = stay * choice_self + (1-stay) * (1-choice_self) #staying -> same choice as last
+      stay <- rbinom(1, 1, stay_prob) #decide whether agent stays
+      choice <- stay * choice_self + (1-stay) * (1-choice_self) #staying -> same choice as last
       
     } else if (prev_reward < mean_reward) { #if the agent lost, i.e. got less than mean score
-      switch = rbinom(1, 1, switch_prob) #decide whether agent switches
-      choice = switch * (1-choice_self) + (1-switch) * choice_self #switching -> opposite choice of last
+      switch <- rbinom(1, 1, switch_prob) #decide whether agent switches
+      choice <- switch * (1-choice_self) + (1-switch) * choice_self #switching -> opposite choice of last
       
     } else if (prev_reward == mean_reward) { #if the agent got mean score
-      choice = rbinom(1, 1, 0.5) #make random choice
+      choice <- rbinom(1, 1, 0.5) #make random choice
     }
   }
   
@@ -229,44 +281,44 @@ SoftmaxTitTat <- function(params, hidden_states = NULL, player, p_matrix, choice
 }
 ```
 
-#Start k-ToM functions
+#K-ToM functions
  
 Learning function - 0ToM estimate update
 ```{r}
-basic_variance_update = function(prev_hidden_states, params) {
+basic_variance_update <- function(prev_hidden_states, params) {
   #input
-  volatility = params$volatility #the volatility parameter reduces learning, assuming that there is noise in the opponents decisions
-  prev_variance_basic = prev_hidden_states$own_hidden_states$variance_basic #the uncertainty of opponent probability
-  prev_mean_basic = prev_hidden_states$own_hidden_states$mean_basic #the mean estimate of opponent probability
+  volatility <- params$volatility #the volatility parameter reduces learning, assuming that there is noise in the opponents decisions
+  prev_variance_basic <- prev_hidden_states$own_hidden_states$variance_basic #the uncertainty of opponent probability
+  prev_mean_basic <- prev_hidden_states$own_hidden_states$mean_basic #the mean estimate of opponent probability
   
   #prepare volatility
-  volatility = exp(volatility)
+  volatility <- exp(volatility)
   #prepare variance 
-  prev_variance_basic = exp(prev_variance_basic)
+  prev_variance_basic <- exp(prev_variance_basic)
   
   #calculate the new variance
-  variance_basic = 
+  variance_basic <- 
     1 / (
       (1 / (volatility + prev_variance_basic)) +
         inv.logit(prev_mean_basic) * (1 - inv.logit(prev_mean_basic)))
   
   #logistic transform
-  variance_basic = log(variance_basic)
+  variance_basic <- log(variance_basic)
   
   return(variance_basic)
 }
 
-basic_mean_update = function(prev_hidden_states, choices, variance_basic) {
+basic_mean_update <- function(prev_hidden_states, choices, variance_basic) {
   #input
-  prev_c_op = choices[2] #opponent's choice
-  prev_mean_basic = prev_hidden_states$own_hidden_states$mean_basic #the uncertainty of opponent probability
+  prev_c_op <- choices[2] #opponent's choice
+  prev_mean_basic <- prev_hidden_states$own_hidden_states$mean_basic #the uncertainty of opponent probability
   variance_basic #the uncertainty of opponent probability
   
   #prepare variance
-  variance = exp(variance_basic)
+  variance <- exp(variance_basic)
   
   #calculate the new mean
-  mean_basic = prev_mean_basic + variance_basic * (prev_c_op - inv.logit(prev_mean_basic))
+  mean_basic <- prev_mean_basic + variance_basic * (prev_c_op - inv.logit(prev_mean_basic))
   
   return(mean_basic)
 }
@@ -280,9 +332,9 @@ p_op_1_k_approx_fun <- function(prev_hidden_states, level){
   
   #input
   #for each sophistication level
-  prev_mean = prev_hidden_states$own_hidden_states$mean # mean of opponent probability estimation VECTOR
-  prev_variance = prev_hidden_states$own_hidden_states$variance # the variance for each estimated parameter MATRIX
-  prev_gradient = prev_hidden_states$own_hidden_states$gradient # gradients for each parameter MATRIX
+  prev_mean <- prev_hidden_states$own_hidden_states$mean # mean of opponent probability estimation VECTOR
+  prev_variance <- prev_hidden_states$own_hidden_states$variance # the variance for each estimated parameter MATRIX
+  prev_gradient <- prev_hidden_states$own_hidden_states$gradient # gradients for each parameter MATRIX
   
   #constants
   a <- 0.205
@@ -291,134 +343,45 @@ p_op_1_k_approx_fun <- function(prev_hidden_states, level){
   d <- 0.870
   
   #prepare variance
-  prev_variance_prepared = NULL
-  for (level_index in 1:level) {
-    prev_variance_prepared[level_index] = t(exp(prev_variance[level,])) %*% prev_gradient[level,]^2 
+  prev_variance_prepared <- NULL #make empty list
+  #variance is exponated, gradient is squared
+  for (level_index in 1:level) { #for each level
+    #matrix-mutliply the transposed variances on the gradient. This gives a single value
+    prev_variance_prepared[level_index] <- t(exp(prev_variance[level,])) %*% prev_gradient[level,]^2 
   }
   
   #calculate estimated probability of opponent choice
-  p_op_1_k_approx = 
+  p_op_1_k_approx <- 
    inv.logit((prev_mean + b * prev_variance_prepared^c) / sqrt(1 + a * prev_variance_prepared^d))
  
   #log-transform
-  p_op_1_k_approx = log(p_op_1_k_approx)
+  p_op_1_k_approx <- log(p_op_1_k_approx)
   
   return(p_op_1_k_approx)
 }
 
 update_pk <- function(prev_hidden_states, choices, p_op_1_k_approx){
   #input
-  prev_c_op = choices[2] #opponent's choice
+  prev_c_op <- choices[2] #opponent's choice
   #for each sophistication level
-  prev_p_k = prev_hidden_states$own_hidden_states$p_k  # probability of sophistication level k VECTOR
+  prev_p_k <- prev_hidden_states$own_hidden_states$p_k  # probability of sophistication level k VECTOR
   p_op_1_k_approx # probability of opponent choosing 1, approximated semi-analytically VECTOR
   
   #prepare probability
-  p_op_1_k_approx = exp(p_op_1_k_approx)
+  p_op_1_k_approx <- exp(p_op_1_k_approx)
   
   #calculate probability of each possible sophistication level
-  p_k =
+  p_k <-
     prev_c_op* #if opponent chose 1
     ((prev_p_k*p_op_1_k_approx)/sum(prev_p_k*p_op_1_k_approx)) + 
     (1-prev_c_op)* #if opponent chose 0
     (prev_p_k*(1-p_op_1_k_approx)/sum(prev_p_k*(1-p_op_1_k_approx))) 
   
-  return(p_k)
-}
-
-```
-
-Learning function - 0ToM estimate update
-```{r}
-basic_variance_update = function(prev_hidden_states, params) {
-  #input
-  volatility = params$volatility #the volatility parameter reduces learning, assuming that there is noise in the opponents decisions
-  prev_variance_basic = prev_hidden_states$own_hidden_states$variance_basic #the uncertainty of opponent probability
-  prev_mean_basic = prev_hidden_states$own_hidden_states$mean_basic #the mean estimate of opponent probability
-  
-  #prepare volatility
-  volatility = exp(volatility)
-  #prepare variance 
-  prev_variance_basic = exp(prev_variance_basic)
-  
-  #calculate the new variance
-  variance_basic = 
-    1 / (
-      (1 / (volatility + prev_variance_basic)) +
-        inv.logit(prev_mean_basic) * (1 - inv.logit(prev_mean_basic)))
-  
-  #logistic transform
-  variance_basic = log(variance_basic)
-  
-  return(variance_basic)
-}
-
-basic_mean_update = function (prev_hidden_states, choices, variance_basic) {
-  #input
-  prev_c_op = choices[2] #opponent's choice
-  prev_mean_basic = prev_hidden_states$own_hidden_states$mean_basic #the uncertainty of opponent probability
-  variance_basic #the uncertainty of opponent probability
-  
-  #prepare variance
-  variance_basic = exp(variance_basic)
-  
-  #calculate the new mean
-  mean_basic = prev_mean_basic + variance_basic * (prev_c_op - inv.logit(prev_mean_basic))
-  
-  return(mean_basic)
-}
-```
-
-Learning function - update p(k)
-```{r}
-p_op_1_k_approx_fun <- function(prev_hidden_states, level){
-  #this calculation uses a semi-analytical approximation by Daunizeau, J. (2017)
-  #this is the VBA_Elogsig
-  
-  #input
-  #for each sophistication level
-  prev_mean = prev_hidden_states$own_hidden_states$mean # mean of opponent probability estimation VECTOR
-  prev_variance = prev_hidden_states$own_hidden_states$variance # the variance for each estimated parameter MATRIX
-  prev_gradient = prev_hidden_states$own_hidden_states$gradient # gradients for each parameter MATRIX
-  
-  #constants
-  a <- 0.205
-  b <- -0.319
-  c <- 0.781
-  d <- 0.870
-  
-  #prepare variance
-  prev_variance_prepared = NULL
-  for (level_index in 1:level) {
-    prev_variance_prepared[level_index] = t(exp(prev_variance[level,])) %*% prev_gradient[level,]^2 
+  if (length(p_k) > 1) { #if higher than a 1-ToM
+      #Force 0-ToM probability so that the probabilities sum to 1
+      p_k[1] <- 
+    1 - sum(p_k[2:length(p_k)])
   }
-  
-  #calculate estimated probability of opponent choice
-  p_op_1_k_approx = 
-   inv.logit((prev_mean + b * prev_variance_prepared^c) / sqrt(1 + a * prev_variance_prepared^d))
- 
-  #log-transform
-  p_op_1_k_approx = log(p_op_1_k_approx)
-  
-  return(p_op_1_k_approx)
-}
-
-update_pk <- function(prev_hidden_states, choices, p_op_1_k_approx){
-  #input
-  prev_c_op = choices[2] #opponent's choice
-  #for each sophistication level
-  prev_p_k = prev_hidden_states$own_hidden_states$p_k  # probability of sophistication level k VECTOR
-  p_op_1_k_approx # probability of opponent choosing 1, approximated semi-analytically VECTOR
-  
-  #prepare probability
-  p_op_1_k_approx = exp(p_op_1_k_approx)
-  
-  #calculate probability of each possible sophistication level
-  p_k =
-    prev_c_op* #if opponent chose 1
-    ((prev_p_k*p_op_1_k_approx)/sum(prev_p_k*p_op_1_k_approx)) + 
-    (1-prev_c_op)* #if opponent chose 0
-    (prev_p_k*(1-p_op_1_k_approx)/sum(prev_p_k*(1-p_op_1_k_approx))) 
   
   return(p_k)
 }
@@ -429,23 +392,22 @@ Learning function - updating parameter estimates
 ```{r}
 parameter_variance_update <- function(prev_hidden_states, params, p_k) {
   #input
-  volatility = params$volatility
-  volatility_dummy = params$volatility_dummy #dummy parable flags which parameters are affected by volatility
+  volatility <- params$volatility
+  volatility_dummy <- params$volatility_dummy #dummy parable flags which parameters are affected by volatility
   #for each k:
-  prev_param_mean = prev_hidden_states$own_hidden_states$param_mean #the mean for each estimated parameter MATRIX
-  prev_variance = prev_hidden_states$own_hidden_states$variance #the uncertainty for each estimated parameter MATRIX
-  prev_gradient = prev_hidden_states$own_hidden_states$gradient #the gradient for each estimated parameter MATRIX
+  prev_param_mean <- prev_hidden_states$own_hidden_states$param_mean #the mean for each estimated parameter MATRIX
+  prev_variance <- prev_hidden_states$own_hidden_states$variance #the uncertainty for each estimated parameter MATRIX
+  prev_gradient <- prev_hidden_states$own_hidden_states$gradient #the gradient for each estimated parameter MATRIX
   p_k #the probability of sopistication level k VECTOR
   
-  
   #prepare volatility
-  volatility = exp(volatility)*volatility_dummy
+  volatility <- exp(volatility)*volatility_dummy
   
   #prepare variance
-  prev_variance = exp(prev_variance)
+  prev_variance <- exp(prev_variance)
   
   #calculate new variance
-  variance = 
+  variance <- 
   1 / 
     (1 / (prev_variance + volatility) + 
        p_k * 
@@ -453,7 +415,7 @@ parameter_variance_update <- function(prev_hidden_states, params, p_k) {
        prev_gradient^2)
   
   #logistic transform
-  variance = log(variance)
+  variance <- log(variance)
   
   return(variance)
 }  
@@ -461,23 +423,23 @@ parameter_variance_update <- function(prev_hidden_states, params, p_k) {
 
 parameter_mean_update <- function(prev_hidden_states, choices, p_k, variance){
   #input
-  prev_c_op = choices[2] #opponent's choice
+  prev_c_op <- choices[2] #opponent's choice
   #for each sophistication level k:
-  prev_mean = prev_hidden_states$own_hidden_states$mean #the mean of opponent probability estimation VECTOR
-  prev_param_mean = prev_hidden_states$own_hidden_states$param_mean #the mean for each estimated parameter MATRIX
-  prev_gradient = prev_hidden_states$own_hidden_states$gradient #the gradient for each estimated parameter MATRIX
+  prev_mean <- prev_hidden_states$own_hidden_states$mean #the mean of opponent probability estimation VECTOR
+  prev_param_mean <- prev_hidden_states$own_hidden_states$param_mean #the mean for each estimated parameter MATRIX
+  prev_gradient <- prev_hidden_states$own_hidden_states$gradient #the gradient for each estimated parameter MATRIX
   p_k #the probability of sophistication level k VECTOR
   variance #the variance of each estimated parameter MATRIX
   
   #prepare variance
-  variance = exp(variance)*prev_gradient
+  variance <- exp(variance)*prev_gradient
   
   #calculate new mean estimates
-  param_mean = 
+  param_mean <- 
     prev_param_mean + p_k * variance * (prev_c_op - inv.logit(prev_mean))
   
   #?# "for numerical purposes" - unsure if necessary
-  #param_mean = inv.logit(logit(param_mean))
+  #param_mean <- inv.logit(logit(param_mean))
   
   return(param_mean)
 }
@@ -486,7 +448,7 @@ parameter_mean_update <- function(prev_hidden_states, choices, p_k, variance){
 
 Learning function - updating gradient
 ```{r}
-gradient_update = function(opponent_prev_hidden_states, params, mean, param_mean, reverse_choices, opponent_level, opponent_player, p_matrix.) {
+gradient_update <- function(opponent_prev_hidden_states, params, mean, param_mean, reverse_choices, opponent_level, opponent_player, p_matrix.) {
   #input
   opponent_prev_hidden_states #opponent's hidden states, for running the learning function
   reverse_choices #opponent's perspective
@@ -496,27 +458,27 @@ gradient_update = function(opponent_prev_hidden_states, params, mean, param_mean
   param_mean #the mean for each estimated parameter MATRIX
   
   #Make empty list for filling in gradients
-  gradient = NULL
+  gradient <- NULL
   
   for (param in 1:length(param_mean)) {
     
       #calculate increment
-      increment = max(abs(1e-4*param_mean[param]), 1e-4)
+      increment <- max(abs(1e-4*param_mean[param]), 1e-4)
       
       #use the parameter estimates
-      param_mean_incremented = param_mean 
+      param_mean_incremented <- param_mean 
       #but use one of the incremented instead
-      param_mean_incremented[param] = param_mean[param] + increment
+      param_mean_incremented[param] <- param_mean[param] + increment
       
       #Make a list for parameters to be inserted
-      opponent_params = list(
+      opponent_params <- list(
       behavioural_temperature = param_mean_incremented[2], #temperature is the second column in the matrix
       volatility = param_mean_incremented[1], #volatility is the first column in the matrix
       volatility_dummy = params$volatility_dummy
       ) 
       
       #run the learning function of opponent using param_mean_temp as parameter values
-      opponent_hidden_states_incremented = rec_learning_function(prev_hidden_states = opponent_prev_hidden_states, 
+      opponent_hidden_states_incremented <- rec_learning_function(prev_hidden_states = opponent_prev_hidden_states, 
                                                            params = opponent_params, 
                                                            choices = reverse_choices,
                                                            level = opponent_level,
@@ -524,14 +486,14 @@ gradient_update = function(opponent_prev_hidden_states, params, mean, param_mean
                                                            p_matrix = p_matrix.) 
       
       #run the decision function of opponent using the temporary hidden states
-      mean_incremented = decision_function(hidden_states = opponent_hidden_states_incremented,
+      mean_incremented <- decision_function(hidden_states = opponent_hidden_states_incremented,
                                            params = opponent_params,
                                            player = opponent_player,
                                            level = opponent_level,
                                            p_matrix = p_matrix.)
       
       #calculate the gradient between parameter increment and probability estimate
-      gradient[param] = (mean_incremented - mean)/increment
+      gradient[param] <- (mean_incremented - mean)/increment
   }
   
   return(gradient)
@@ -540,7 +502,7 @@ gradient_update = function(opponent_prev_hidden_states, params, mean, param_mean
 
 Full learning function
 ```{r} 
-rec_learning_function = function(
+rec_learning_function <- function(
   prev_hidden_states,
   params,
   choices,
@@ -550,54 +512,55 @@ rec_learning_function = function(
 ) {
   
   #p_matrix is stored under another name, to avoid recursion-related errors
-  p_matrix. = p_matrix
+  p_matrix. <- p_matrix
   
   #Make empty list for filling with updated values
-  new_hidden_states = list()
+  new_hidden_states <- list()
   
   if (level == 0) { #If the (simulated) agent is a 0-ToM
     
     #Update 0-ToM's uncertainty of opponent choice probability
-    variance_basic = basic_variance_update(prev_hidden_states, params)
+    variance_basic <- basic_variance_update(prev_hidden_states, params)
+    
     #Update 0-ToM's mean estimate of opponent choice probability
-    mean_basic = basic_mean_update(prev_hidden_states, choices, variance_basic)
+    mean_basic <- basic_mean_update(prev_hidden_states, choices, variance_basic)
     
     #Gather own hidden states into one list
-    own_hidden_states = list(mean_basic = mean_basic, variance_basic = variance_basic)
+    own_hidden_states <- list(mean_basic = mean_basic, variance_basic = variance_basic)
     
   } else { #If the (simulated) agent is a K-ToM
   
     #Update p_k
     p_op_1_k_approx <- p_op_1_k_approx_fun(prev_hidden_states, level)
-    p_k = update_pk(prev_hidden_states, choices, p_op_1_k_approx)
+    p_k <- update_pk(prev_hidden_states, choices, p_op_1_k_approx)
     
-    variance = parameter_variance_update(prev_hidden_states, params, p_k)
-    param_mean = parameter_mean_update(prev_hidden_states, choices, p_k, variance)
+    variance <- parameter_variance_update(prev_hidden_states, params, p_k)
+    param_mean <- parameter_mean_update(prev_hidden_states, choices, p_k, variance)
     
     #Make empty structures for filling in new means
-    mean = NULL
-    gradient = matrix(NA, ncol = ncol(param_mean), nrow = level) #An empty matrix with a column for each parameter and a row for each level
+    mean <- NULL
+    gradient <- matrix(NA, ncol = ncol(param_mean), nrow = level) #An empty matrix with a column for each parameter and a row for each level
     
     #Prepare opponent's perspective
-    reverse_choices = choices[2:1]
-    opponent_player = 1-player
+    reverse_choices <- choices[2:1]
+    opponent_player <- 1-player
     
     #Now we need to go through each possible opponent's level one at a time. Highest opponent level is 1 lower than own level
     for (level_index in 1:level) {
       
       #Set the simulated opponents level. "level_index" is one higher than the actual level because it isn't possible to index 0
-      opponent_level = level_index-1
+      opponent_level <- level_index-1
       #Extract the currently simulated opponent's hidden states
-      opponent_hidden_states = prev_hidden_states[[level_index]]
+      opponent_hidden_states <- prev_hidden_states[[level_index]]
       #Extract the estimated parameters of the current opponent
-      opponent_params = list(
+      opponent_params <- list(
         behavioural_temperature = param_mean[level_index, 2], #temperature is the second column in the matrix
         volatility = param_mean[level_index, 1], #volatility is the first column in the matrix
         volatility_dummy = params$volatility_dummy
         ) 
       
       #Simulate opponent learning
-      new_opponent_hidden_states = rec_learning_function(prev_hidden_states = opponent_hidden_states,
+      new_opponent_hidden_states <- rec_learning_function(prev_hidden_states = opponent_hidden_states,
                                                      params = opponent_params,
                                                      choices = reverse_choices,
                                                      level = opponent_level,
@@ -605,14 +568,14 @@ rec_learning_function = function(
                                                      p_matrix = p_matrix.) 
       
       #Simulate opponent deciding
-      mean[level_index] = decision_function(hidden_states = new_opponent_hidden_states,
+      mean[level_index] <- decision_function(hidden_states = new_opponent_hidden_states,
                                             params = opponent_params,
                                             player = opponent_player,
                                             level = opponent_level,
                                             p_matrix = p_matrix.)
       
       #Update gradient
-      gradient[level_index,] = gradient_update(opponent_prev_hidden_states = opponent_hidden_states,
+      gradient[level_index,] <- gradient_update(opponent_prev_hidden_states = opponent_hidden_states,
                                                params = params,
                                                mean = mean[level_index],
                                                param_mean = param_mean[level_index,], #only input the param_mean for the current level
@@ -630,11 +593,11 @@ rec_learning_function = function(
     }
     
     #Gather own hidden states into one list
-    own_hidden_states = list(p_k = p_k, mean = mean, param_mean = param_mean, variance = variance, gradient = gradient)
+    own_hidden_states <- list(p_k = p_k, mean = mean, param_mean = param_mean, variance = variance, gradient = gradient)
   }
   
   #Save own updated hidden states to new hidden states
-  new_hidden_states$own_hidden_states = own_hidden_states
+  new_hidden_states$own_hidden_states <- own_hidden_states
   
   return(new_hidden_states)
 }
@@ -648,15 +611,15 @@ basic_p_op_1_fun <- function(hidden_states){
   #THIS IS THE VARIANT USED IN THE MATLAB CODE, WHICH DOES NOT USE VOLATILITY
   
   #for each sophistication level k:
-  mean_basic = hidden_states$own_hidden_states$mean_basic #mean opponent probability estimate VECTOR
-  variance_basic = hidden_states$own_hidden_states$variance_basic #variance of parameter estimates MATRIX
-  a = 0.36 #this number is taken from the matlab code in ObsRecGen
+  mean_basic <- hidden_states$own_hidden_states$mean_basic #mean opponent probability estimate VECTOR
+  variance_basic <- hidden_states$own_hidden_states$variance_basic #variance of parameter estimates MATRIX
+  a <- 0.36 #this number is taken from the matlab code in ObsRecGen
   
   #Prepare variance
-  variance_basic = exp(variance_basic)
+  variance_basic <- exp(variance_basic)
   
   #calculate opponent's probability of choosing 1
-  p_op_1_basic = inv.logit(mean_basic / sqrt(1 + a * variance_basic)) 
+  p_op_1_basic <- inv.logit(mean_basic / sqrt(1 + a * variance_basic)) 
   
   return(p_op_1_basic)
 }
@@ -667,18 +630,18 @@ basic_p_op_1_fun <- function(hidden_states){
 #   #THIS IS THE VARIANT BASED ON THE EQUATIONS, BUT NOT USED IN THE MATLAB CODE
 # 
 #   #input
-#   volatility = params$volatility
-#   mean_basic =  hidden_states$own_hidden_states$mean_basic #mean opponent probability estimate VECTOR
-#   variance_basic =  hidden_states$own_hidden_states$variance_basic #variance of parameter estimates MATRIX
+#   volatility <- params$volatility
+#   mean_basic <-  hidden_states$own_hidden_states$mean_basic #mean opponent probability estimate VECTOR
+#   variance_basic <-  hidden_states$own_hidden_states$variance_basic #variance of parameter estimates MATRIX
 # 
 #   #Prepare variance
-#   variance_basic = exp(variance_basic)
+#   variance_basic <- exp(variance_basic)
 # 
 #   #prepare volatility
-#   volatility = exp(volatility)
+#   volatility <- exp(volatility)
 # 
 #   #calculate opponent's probability of choosing 1
-#   p_op_1_basic = inv.logit(mean_basic/sqrt(1+(variance_basic+volatility)*3/pi^2))
+#   p_op_1_basic <- inv.logit(mean_basic/sqrt(1+(variance_basic+volatility)*3/pi^2))
 # 
 #   return(p_op_1_basic)
 # }
@@ -693,16 +656,16 @@ p_op_1_k_fun <- function(hidden_states){
   #THIS IS THE VARIANT USED IN THE MATLAB CODE, WHICH DOES NOT USE VOLATILITY
   
   #for each sophistication level k:
-  mean = hidden_states$own_hidden_states$mean #mean opponent probability estimate VECTOR
-  variance = hidden_states$own_hidden_states$variance #variance of parameter estimates MATRIX
-  gradient = hidden_states$own_hidden_states$gradient
-  a = 0.36 #this number is taken from the matlab code in ObsRecGen
+  mean <- hidden_states$own_hidden_states$mean #mean opponent probability estimate VECTOR
+  variance <- hidden_states$own_hidden_states$variance #variance of parameter estimates MATRIX
+  gradient <- hidden_states$own_hidden_states$gradient
+  a <- 0.36 #this number is taken from the matlab code in ObsRecGen
   
   #Prepare variance
-  variance = rowSums(exp(variance) * gradient^2) #summing the variances of each parameter (after weighting by gradient). One sum per sophistication level
+  variance <- rowSums(exp(variance) * gradient^2) #summing the variances of each parameter (after weighting by gradient). One sum per sophistication level
   
   #calculate opponent's probability of choosing 1
-  p_op_1_k = inv.logit(mean / sqrt(1 + a * variance)) 
+  p_op_1_k <- inv.logit(mean / sqrt(1 + a * variance)) 
   
   return(p_op_1_k)
 }
@@ -713,20 +676,20 @@ p_op_1_k_fun <- function(hidden_states){
 #   #THIS IS THE VARIANT BASED ON THE EQUATIONS, BUT NOT USED IN THE MATLAB CODE
 #   
 #   #input
-#   volatility = params$volatility
+#   volatility <- params$volatility
 #   #for each sophistication level k:
 #   mean #mean opponent probability estimate VECTOR
 #   variance #variance of parameter estimates MATRIX
 #   
 #   #prepare volatility
-#   dummy = c(1,0,0) #dummy parable flags which parameters are affected by volatility #?# We need to figure out which parameter this is targeting!
-#   volatility = exp(volatility)*dummy
+#   dummy <- c(1,0,0) #dummy parable flags which parameters are affected by volatility #?# We need to figure out which parameter this is targeting!
+#   volatility <- exp(volatility)*dummy
 #   
 #   #Prepare variance
-#   variance = sum(exp(variance)*gradient^2)
+#   variance <- sum(exp(variance)*gradient^2)
 #   
 #   #calculate opponent's probability of choosing 1
-#   p_op_1_k = inv.logit(mean/sqrt(1+(variance+volatility)*3/pi^2)) 
+#   p_op_1_k <- inv.logit(mean/sqrt(1+(variance+volatility)*3/pi^2)) 
 #   
 #   return(p_op_1_k)
 # }
@@ -735,7 +698,7 @@ p_op_1_k_fun <- function(hidden_states){
 
 Full decision function 
 ```{r}
-decision_function = function(
+decision_function <- function(
   hidden_states,
   params,
   player,
@@ -746,28 +709,28 @@ decision_function = function(
   if (level == 0) { #If the (simulated) agent is a 0-ToM
     
     #Calculate opponent probability of choosing 1
-    p_op_1 = basic_p_op_1_fun(hidden_states)
+    p_op_1 <- basic_p_op_1_fun(hidden_states)
     
   } else { #If the (simulated) agent is a K-ToM
     
     #Calculate opponent probability of choosing 1, for each k
-    p_op_1_k = p_op_1_k_fun(hidden_states)
+    p_op_1_k <- p_op_1_k_fun(hidden_states)
   
     #extract probabilities for each opponent level
-    p_k = hidden_states$own_hidden_states$p_k
+    p_k <- hidden_states$own_hidden_states$p_k
     
     #Weigh probabilities by corresponding level probabilities, to calculate an aggregate probability of opponent choosing 1
-    p_op_1 = sum(p_op_1_k * p_k)
+    p_op_1 <- sum(p_op_1_k * p_k)
   }
   
   #Calculate the expected payoff difference
-  e_payoff_dif = expected_payoff_difference(p_op_1, player, p_matrix)
+  e_payoff_dif <- expected_payoff_difference(p_op_1, player, p_matrix)
   
   #Put into the softmax function to calculate the probability of choosing 1
-  p_self_1 = softmax(e_payoff_dif, params$behavioural_temperature)
+  p_self_1 <- softmax(e_payoff_dif, params$behavioural_temperature)
   
   #Make into logodds
-  p_self_1 = logit(p_self_1)
+  p_self_1 <- logit(p_self_1)
   
   return(p_self_1)
   }
@@ -776,7 +739,7 @@ decision_function = function(
 
 Full k-ToM function
 ```{r}
-k_ToM = function(params = "default", hidden_states, player, level = NULL, p_matrix, choice_self, choice_op, return_hidden_states = T) {
+k_ToM <- function(params = "default", hidden_states, player, level = NULL, p_matrix, choice_self, choice_op, return_hidden_states = T) {
   #DESCRIPTION:
   #INPUT:
   #OUTPUT:
@@ -790,26 +753,26 @@ k_ToM = function(params = "default", hidden_states, player, level = NULL, p_matr
                    level = level
                    )
   } 
-  
 
-  if (is.null(level)){ #if no level where specified use the one specified in the loop
-    level = params$level
+  #if no level where specified use the one specified in the loop
+  if (is.null(level)){ 
+    level <- params$level
   }
   
   #the input comes from last round
-  prev_hidden_states = hidden_states
+  prev_hidden_states <- hidden_states
   
   #bind choices together for easy reorganising
-  choices = c(choice_self, choice_op)
+  choices <- c(choice_self, choice_op)
   
   if (is.null(choice_self)){ #If first round or missed trial
     
-    new_hidden_states = prev_hidden_states #No update
+    new_hidden_states <- prev_hidden_states #No update
     
   } else {
     
     #Update hidden states
-     new_hidden_states = 
+     new_hidden_states <- 
       rec_learning_function(
         prev_hidden_states,
         params,
@@ -820,7 +783,7 @@ k_ToM = function(params = "default", hidden_states, player, level = NULL, p_matr
   }
   
   #Calculate decision probability
-  p_self_1 = 
+  p_self_1 <- 
     decision_function(
       hidden_states = new_hidden_states,
       params,
@@ -829,10 +792,10 @@ k_ToM = function(params = "default", hidden_states, player, level = NULL, p_matr
       p_matrix) 
   
   #Make logodds into probability
-  p_self_1 = inv.logit(p_self_1)
+  p_self_1 <- inv.logit(p_self_1)
   
   #Choose
-  choice = rbinom(1, 1, p_self_1)
+  choice <- rbinom(1, 1, p_self_1)
   
   return(list(choice = choice, hidden_states = new_hidden_states))
 }
@@ -840,7 +803,7 @@ k_ToM = function(params = "default", hidden_states, player, level = NULL, p_matr
 
 Preparing hidden states for the k-ToM function
 ```{r}
-rec_prepare_k_ToM = function(level, priors = "default") {
+rec_prepare_k_ToM <- function(level, priors = "default") {
   
   if (class(priors) != "list"){ #Use default priors if nothing else is specified
     
@@ -856,46 +819,46 @@ rec_prepare_k_ToM = function(level, priors = "default") {
   }
   
   #Make empty list for filling with updated values
-  new_hidden_states = NULL
+  new_hidden_states <- NULL
   
   if (level == 0) { #If the (simulated) agent is a 0-ToM
     
     #Set prior variance on 0-ToM's estimate of opponent choice probability
-    variance_basic = priors$variance_basic
+    variance_basic <- priors$variance_basic
     #Set prior mean on 0-ToM's estimate of opponent choice probability
-    mean_basic = priors$mean_basic
+    mean_basic <- priors$mean_basic
     
     #Gather own hidden states into one list
-    own_hidden_states = list(mean_basic = mean_basic, variance_basic = variance_basic)
+    own_hidden_states <- list(mean_basic = mean_basic, variance_basic = variance_basic)
     
   } else { #If the (simulated) agent is a K-ToM
     
     #Set priors, one for each of opponent's possible sophistication level
     #Probability is agnostic
-    p_k = rep(1, level)/level
+    p_k <- rep(1, level)/level
     #Mean of opponent choice probability estimate
-    mean = rep(priors$mean, level)
+    mean <- rep(priors$mean, level)
     #Variance on parameter estimates
-    variance = t(matrix(rep(priors$variance, level),
+    variance <- t(matrix(rep(priors$variance, level),
                         nrow = length(priors$variance)))
     #Mean of parameter estimates
-    param_mean = t(matrix(rep(priors$param_mean, level),
+    param_mean <- t(matrix(rep(priors$param_mean, level),
                           nrow = length(priors$param_mean)))
     #Gradient
-    gradient = t(matrix(rep(priors$gradient, level),
+    gradient <- t(matrix(rep(priors$gradient, level),
                       nrow = length(priors$gradient)))
     
     #Gather own hidden states into one list
-    own_hidden_states = list(p_k = p_k, mean = mean, param_mean = param_mean, variance = variance, gradient = gradient)
+    own_hidden_states <- list(p_k = p_k, mean = mean, param_mean = param_mean, variance = variance, gradient = gradient)
       
     #Now we need to go through each possible opponent's level one at a time. Highest opponent level is 1 lower than own level
     for (level_index in 1:level) {
       
       #Set the simulated opponents level. "level_index" is one higher than the actual level because it isn't possible to index 0
-      opponent_level = level_index-1
+      opponent_level <- level_index-1
       
       #Get hidden states from simulated opponents
-      new_opponent_hidden_states = rec_prepare_k_ToM(level = opponent_level, priors) 
+      new_opponent_hidden_states <- rec_prepare_k_ToM(level = opponent_level, priors) 
       
       #Save opponent's hidden states in the list structure. Name it k-ToM
       eval(parse(text = paste(
@@ -907,13 +870,11 @@ rec_prepare_k_ToM = function(level, priors = "default") {
   }
   
   #Save own updated hidden states to new hidden states
-  new_hidden_states$own_hidden_states = own_hidden_states
+  new_hidden_states$own_hidden_states <- own_hidden_states
   
   return(new_hidden_states)
 }
 ```
-
-#End k-ToM functions
 
 #Prepare agents functions
 ```{r prepare}
@@ -941,18 +902,18 @@ prepare <- function(strategy_string,
   if (strategy_string == "RB") { #For Random Bias
     params <- list(
       "prop" = inv.logit(rnorm(1, mean = logit(RB[1]), sd = RB[2])))
-    hidden_states = "None"
+    hidden_states <- "None"
     
   } else if (strategy_string == "WSLS") { #For Win-Stay-Loose-Switch
     params <- list(
       "stay_prob" = inv.logit(rnorm(1, mean = logit(WSLS[1]), sd = WSLS[2])),
       "switch_prob" = inv.logit(rnorm(1, mean = logit(WSLS[3]), sd = WSLS[4])))
-    hidden_states = "None"
+    hidden_states <- "None"
     
   } else if (strategy_string == "SoftmaxTitTat") { #For Softmax Tit for Tat
     params <- list(
       "bavioral_temp" = log(rnorm(1, mean = exp(TFT[1]), sd = TFT[2])))
-    hidden_states = "None"
+    hidden_states <- "None"
     
   } else if (grepl("-ToM", strategy_string)) { #if the strategy is a k-ToM
     level <- as.numeric(str_extract(strategy_string, "[0-9]")) #save the level
@@ -963,10 +924,10 @@ prepare <- function(strategy_string,
       level = level)
     hidden_states <- rec_prepare_k_ToM(level = level, priors = k_ToM_priors)
     
-  } else {
+  } else { #if no strategy is recognized
     stop("Could not find strategy, try to check for spelling errors")
   }
-
+  
   result <- list(params = params, hidden_states = hidden_states)
   return(result)
 }
@@ -1095,8 +1056,8 @@ compete <- function(player1, player2, p1_params, p2_params, p1_hidden_states = N
   }
   
     #setting to NULL to signify it is the first round
-  p1_choice = NULL
-  p2_choice = NULL
+  p1_choice <- NULL
+  p2_choice <- NULL
   
     #fetch strategy function - just the player name unless it is a k-ToM
   strat_p1 <- if_else(grepl("-ToM", player1), "k_ToM", player1)
@@ -1141,7 +1102,7 @@ compete <- function(player1, player2, p1_params, p2_params, p1_hidden_states = N
     p2_choice <- p2$choice
     
       #generate result
-    result <- p_matrix[p_matrix$a1_choice == p1_choice & p_matrix$a2_choice == p2_choice,]
+    result <- p_matrix[p_matrix$p1_choice == p1_choice & p_matrix$p2_choice == p2_choice,]
     
     
 
@@ -1150,7 +1111,7 @@ compete <- function(player1, player2, p1_params, p2_params, p1_hidden_states = N
     #save results
     round_result <- data_frame(player = c(player1, player2),  
                                choice = c(p1$choice, p2$choice),
-                               points = c(result$a1_reward, result$a2_reward), 
+                               points = c(result$p1_reward, result$p2_reward), 
                                round_nr = round, 
                                pair = paste(player1, player2, sep = " / "),
                                hidden_states = c(p1_hidden_states, p2_hidden_states)
@@ -1168,13 +1129,20 @@ compete <- function(player1, player2, p1_params, p2_params, p1_hidden_states = N
 ```
 #Simulation
 ```{r simulation} 
+#Setting seed
+set.seed(2)
 
-strategies_unprep = c("RB", "WSLS", "SoftmaxTitTat", "0-ToM", "1-ToM", "2-ToM", "3-ToM", "7-ToM")
+#fetch payoff-matrix
+penny_competitive_matrix = fetch_p_matrix("penny_competitive")
 
+#Define strategies used
+strategies_unprep <- c("RB", "WSLS", "SoftmaxTitTat", "0-ToM", "1-ToM", "2-ToM", "3-ToM", "7-ToM")
+
+#Prepare agents and competition dataframe
 agent_df <- create_agents(strategies_unprep, match_up = "RR", prepare_with_defaults = T)
 agent_df
 
-#All competitions in the data_frame
+#Make all agents in the dataframe compete
 result_df <- compete_all(agent_df, n_rounds = 200, 
         p_matrix = penny_competitive_matrix)
 
