@@ -1146,6 +1146,8 @@ agent_df
 result_df <- compete_all(agent_df, n_rounds = 200, 
         p_matrix = penny_competitive_matrix)
 
+save(result_df, file = "result_df_big.rda")
+
 #examining results
 result_df
 result_sum <- result_df %>% group_by(player) %>% summarise(total_point = sum(points), mean_choice = mean(choice))
