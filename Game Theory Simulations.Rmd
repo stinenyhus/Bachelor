@@ -15,6 +15,7 @@ editor_options:
   - Do multiple simulations
   - Save in compete function should be a list operation
   - Add a reinforcement learning agent
+  - Add a simple Tit for Tat agent
   - Consider if we can use the decision functions using volatility (see if the 1=0.36 works with other volatility values)
   - Consider if we can save p_op_1_k and use that instead of p_op_1_k_approx
   - Make a mode where we can play against the agent
