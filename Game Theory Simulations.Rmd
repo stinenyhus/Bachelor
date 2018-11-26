@@ -181,6 +181,11 @@ softmax <- function(e_payoff_diff, behavioural_temperature){
   #Calculate probability of choosing 1
   p_self_1 <- 1 / (1 + exp(-(e_payoff_diff / behavioural_temperature)))
   
+  #Make an upper bound on softmax's output to avoid getting infinite values when transforming to logodds
+  if (p_self_1 > 0.999) {
+    p_self_1 = 0.999
+  }
+  
   return(p_self_1)
 }
 ```
@@ -567,12 +572,6 @@ rec_learning_function <- function(
                                             player = opponent_player,
                                             level = opponent_level,
                                             p_matrix = p_matrix.)
-      
-        if (is.infinite(mean[level_index])){
-          print(opponent_hidden_states)
-          print(new_opponent_hidden_states)
-          stop("there is an Inf!! - INFINFINFINFINFINFINFINFINFINF BATMAN!")
-          }
       
       #Update gradient
       gradient[level_index,] <- gradient_update(opponent_prev_hidden_states = opponent_hidden_states,
