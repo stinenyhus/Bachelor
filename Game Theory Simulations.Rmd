@@ -33,7 +33,7 @@ editor_options:
 #^the above argument prevents the mulitple 'unknown column' warnings (harmless warnings)
 knitr::opts_chunk$set(echo = TRUE)
 #devtools::install_github("thomasp85/patchwork")
-pacman::p_load(plyr, tidyverse, raster, reshape2, knitr, brms, boot, rethinking, groupdatp2, patchwork)
+pacman::p_load(pacman, plyr, tidyverse, raster, reshape2, knitr, brms, boot, rethinking, groupdata2, patchwork, RColorBrewer)
 ```
 
 #Function for fetching payoff-matrices

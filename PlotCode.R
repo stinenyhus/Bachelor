@@ -1,7 +1,7 @@
 
 p_load(RColorBrewer)
 
-load(file = "result_df.rda")
+load(file = "result_df_big.rda")
 head(result_df)
 
 
@@ -9,7 +9,7 @@ head(result_df)
 ### CREATING PLOTTING FUNCTIONS ###
 
   #add ID function
-add_ID <- function(result_df){
+add_ID <- function(result_df, add_op = F){
   #DESCRIPTION
   #INPUT
   #OUTPUT
@@ -19,11 +19,29 @@ add_ID <- function(result_df){
   result_df$ID <- as.numeric( #as. numeric since sapply returns a matrix
                     sapply(seq(1, n_players, by = 2), #creating a list of the first agent in each pair (jumping by two since it is a pair) 
                     function(x) rep(c(x, x+1), n_rounds))) #creating ID for each pair equal to x and x+1 and repeating for each round
+  
+  if (add_op){
+    result_df$op <- sapply(seq(nrow(result_df)), 
+                          function(x) 
+                          str_split(result_df$pair[x], " / ")[[1]][str_split(result_df$pair[x], " / ")[[1]] !=  result_df$player[x]])
+  }
+  
+  
   return(result_df)
 }
 
+
+result_df <- add_ID(result_df, add_op = T)
+result_sum <- result_df %>% 
+  group_by(ID, player, op) %>% 
+  summarise(total_point = sum(points), mean_choice = mean(choice)) %>% 
+  arrange(desc(total_point))
+result_sum
+
+result_sum_sub <- subset(result_sum, !(op %in% c("RB", "SoftmaxTitTat", "WSLS")) & !(player %in% c("RB", "SoftmaxTitTat", "WSLS")) )
+
   #create a compete matrix
-quick_heatmap <- function(result_df){
+quick_heatmap <- function(result_df, return_plot_df = F){
   #DESCRIPTION
   #INPUT
   #OUTPUT
@@ -56,10 +74,19 @@ quick_heatmap <- function(result_df){
       geom_tile(aes(fill = points), colour = "white") + 
       scale_fill_gradient(low = "lightsteelblue1", high = "steelblue") + 
       theme_classic()
-  return(p)
+  
+  if (return_plot_df){
+    return(list(plot = p, plot_df = tmp_df))
+  } else{
+    return(p)
+  }
 }
 
-quick_heatmap(result_df)
+quick_heatmap(result_df, return_plot_df = F)
+
+
+result_df_sub <- subset(result_df, !(op %in% c("RB", "SoftmaxTitTat", "WSLS")) & !(player %in% c("RB", "SoftmaxTitTat", "WSLS")))
+quick_heatmap(result_df_sub, return_plot_df = F)
 
 #
 
@@ -92,7 +119,7 @@ quick_p_k_plot <- function(result_df, ID, blue = T){
   
 }
 
-quick_p_k_plot(result_df, 28, blue = T)
+quick_p_k_plot(result_df, ID = 52, blue = T)
 
 
 #estimation errors
@@ -118,11 +145,35 @@ length(a_p_op_1)
 length(e_p_op_1)
 dens(p_op_1)
 
+
+#0-ToM plots
+  #Variance
 variance_basic <- c()
+hidden_states <- result_df$hidden_states[result_df$ID == "6"]
 for (i in 1:length(hidden_states)){
-  variance_basic <- c(variance_basic, result_df$hidden_states[result_df$player == "0-ToM"][[i]]$own_hidden_states$variance_basic)
+  variance_basic <- c(variance_basic, result_df$hidden_states[result_df$ID == "6"][[i]]$own_hidden_states$variance_basic)
 }
 
 plot(seq(length(hidden_states)), #the trials
      exp(variance_basic)
+)
+
+  #mean
+mean_basic <- c()
+for (i in 1:length(hidden_states)){
+  mean_basic <- c(mean_basic, result_df$hidden_states[result_df$ID == "6"][[i]]$own_hidden_states$mean_basic)
+}
+
+plot(seq(length(hidden_states)), #the trials
+     inv.logit(mean_basic)
+)
+
+  #p_op_1
+e_p_op_1 <- c()
+for (i in 1:length(hidden_states)){
+  e_p_op_1 <- c(e_p_op_1, basic_p_op_1_fun(hidden_states[[i]])) 
+}
+
+plot(seq(length(hidden_states)), #the trials
+     (e_p_op_1)
 )
