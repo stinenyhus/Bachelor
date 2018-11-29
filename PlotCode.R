@@ -119,7 +119,7 @@ quick_p_k_plot <- function(result_df, ID, blue = T){
   
 }
 
-quick_p_k_plot(result_df, ID = 55, blue = F)
+quick_p_k_plot(result_df, ID = 52, blue = T)
 
 
 #estimation errors
@@ -145,11 +145,35 @@ length(a_p_op_1)
 length(e_p_op_1)
 dens(p_op_1)
 
+
+#0-ToM plots
+  #Variance
 variance_basic <- c()
+hidden_states <- result_df$hidden_states[result_df$ID == "6"]
 for (i in 1:length(hidden_states)){
-  variance_basic <- c(variance_basic, result_df$hidden_states[result_df$player == "0-ToM"][[i]]$own_hidden_states$variance_basic)
+  variance_basic <- c(variance_basic, result_df$hidden_states[result_df$ID == "6"][[i]]$own_hidden_states$variance_basic)
 }
 
 plot(seq(length(hidden_states)), #the trials
      exp(variance_basic)
+)
+
+  #mean
+mean_basic <- c()
+for (i in 1:length(hidden_states)){
+  mean_basic <- c(mean_basic, result_df$hidden_states[result_df$ID == "6"][[i]]$own_hidden_states$mean_basic)
+}
+
+plot(seq(length(hidden_states)), #the trials
+     inv.logit(mean_basic)
+)
+
+  #p_op_1
+e_p_op_1 <- c()
+for (i in 1:length(hidden_states)){
+  e_p_op_1 <- c(e_p_op_1, basic_p_op_1_fun(hidden_states[[i]])) 
+}
+
+plot(seq(length(hidden_states)), #the trials
+     (e_p_op_1)
 )
