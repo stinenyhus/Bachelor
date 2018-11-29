@@ -9,15 +9,13 @@ editor_options:
 
 #Very Nice to do:
   - Handedness/Bias
-  - PLOTS!
   - Add standard deviations to parameter sampling of volatility and temperature - how to limit it to proper values (not negative)
-  - Add I.D. to compete_all function
-  - Do multiple simulations
-  - Save in compete function should be a list operation
-  - Add a reinforcement learning agent
-  - Add a simple Tit for Tat agent
   - Consider if we can use the decision functions using volatility (see if the 1=0.36 works with other volatility values)
   - Consider if we can save p_op_1_k and use that instead of p_op_1_k_approx
+  - Do multiple simulations
+  - Do evolution
+  - Save in compete function should be a list operation
+  - Add a reinforcement learning agent
   - Make a mode where we can play against the agent
 
 #Nice to do:
@@ -29,10 +27,6 @@ editor_options:
   - add the recursive preperation function to be applied at default if not specified to the k_tom function
   - test whether the compete function works without hidden states specified
 
-#Done (this is just so we can see some progress)
-  change the compete function so it does not input as a double list - should just input as a list (if this is changed RB, WSLS and softmax tittat should also be changed)
-  WSLS
-  MADE THE GODDAMN SCRIPT RUN!
 #Packages and WD
 ```{r setup, include=FALSE}
 # !diagnostics off
@@ -212,6 +206,28 @@ RB <- function(params, hidden_states = NULL, player = NULL, p_matrix = NULL, cho
   }
 }
 
+#Tit for Tat
+TFT <- function(params, hidden_states = NULL, player = NULL, p_matrix = NULL, choice_self, choice_op, return_hidden_states = F) {
+  
+  #The probability of TFT copying opponent's choice
+  copy_prob = params$copy_prob
+  
+  if (is.null(choice_op)) { #initial round or missed trial
+    choice <- rbinom(1, 1, 0.5) #make random choice
+  } else {
+    #Decide whether TFT copies opponent
+    copy = rbinom(1, 1, copy_prob)
+    #Calculate resulting choice
+    choice = copy*choice_op + (1-copy)*(1-choice_op)
+  }
+  
+    if (return_hidden_states == T){
+    return(list(choice = choice, hidden_states = hidden_states))
+  } else {
+    return(choice)
+  }
+}
+
 ###Win-Stay-Loose-Switch
 WSLS <- function(params, hidden_states = NULL, player, p_matrix, choice_self, choice_op, return_hidden_states = F){
   #WSLS: Win-stay-loose-switch
@@ -244,36 +260,6 @@ WSLS <- function(params, hidden_states = NULL, player, p_matrix, choice_self, ch
   }
   
   if (return_hidden_states == T){
-    return(list(choice = choice, hidden_states = hidden_states))
-  } else {
-    return(choice)
-  }
-}
-  
-### Softmax Tit for Tat
-SoftmaxTitTat <- function(params, hidden_states = NULL, player, p_matrix, choice_self = NULL, choice_op, return_hidden_states = F){  
-  #SoftmaxTitTat: A Tit for tat agent using a softmax function
-  #INPUT
-    #ID: the ID of the agent
-    #round_result: the result of the last round
-    #params: a list of 1 element: the behaivioural temperature of the agent
-  #OUTPUT
-    #Choice: 0 or 1
-  
-  beta <- params$bavioral_temp
-  c_op <- choice_op
-  
-  if (is.null(c_op)){ #initial round or missed trial
-    #Start by assuming you opponent will COOP - will make the agents every likely to COOP
-    e_payoff_diff <- expected_payoff_difference(1, player, p_matrix)
-    choice <- rbinom(1, 1, prob = softmax(e_payoff_diff, beta))
-  } else {
-  e_payoff_diff <- expected_payoff_difference(c_op, player, p_matrix)
-  choice <- rbinom(1, 1, prob = softmax(e_payoff_diff, beta))
-  }
-  
-  if (return_hidden_states == T){
-    return_hidden_states <- return_hidden_states #does not update params
     return(list(choice = choice, hidden_states = hidden_states))
   } else {
     return(choice)
@@ -879,14 +865,14 @@ rec_prepare_k_ToM <- function(level, priors = "default") {
 #Prepare agents functions
 ```{r prepare}
 prepare <- function(strategy_string,
-                    RB = c(prop_mean = 0.5,
-                           prop_sd = 0.1),
+                    RB = c(prop_mean = 0.7,
+                           prop_sd = 0.01),
                     WSLS = c(stay_mean = 0.9,
                              stay_sd = 0.1,
                              switch_mean = 0.9,
                              switch_sd = 0.1),
-                    TFT= c(temperature_mean = -1,
-                           temperature_sd = 0),
+                    TFT = c(prob_mean = 0.9,
+                            prob_sd = 0.1),
                     k_ToM = c(volatility_mean = -2,
                               volatility_sd = 0,
                               temperature_mean = -1,
@@ -910,9 +896,9 @@ prepare <- function(strategy_string,
       "switch_prob" = inv.logit(rnorm(1, mean = logit(WSLS[3]), sd = WSLS[4])))
     hidden_states <- "None"
     
-  } else if (strategy_string == "SoftmaxTitTat") { #For Softmax Tit for Tat
+  } else if (strategy_string == "TFT") { #For Tit for Tat
     params <- list(
-      "bavioral_temp" = log(rnorm(1, mean = exp(TFT[1]), sd = TFT[2])))
+      "copy_prob" = inv.logit(rnorm(1, mean = logit(TFT[1]), sd = TFT[2])))
     hidden_states <- "None"
     
   } else if (grepl("-ToM", strategy_string)) { #if the strategy is a k-ToM
@@ -1136,7 +1122,7 @@ set.seed(2)
 penny_competitive_matrix = fetch_p_matrix("penny_competitive")
 
 #Define strategies used
-strategies_unprep <- c("RB", "WSLS", "SoftmaxTitTat", "0-ToM", "1-ToM", "2-ToM", "3-ToM", "7-ToM")
+strategies_unprep <- c("RB", "WSLS", "TFT", "0-ToM", "1-ToM", "2-ToM", "3-ToM", "4-ToM", "5-ToM", "6-ToM", "7-ToM")
 
 #Prepare agents and competition dataframe
 agent_df <- create_agents(strategies_unprep, match_up = "RR", prepare_with_defaults = T)
@@ -1146,40 +1132,47 @@ agent_df
 result_df <- compete_all(agent_df, n_rounds = 200, 
         p_matrix = penny_competitive_matrix)
 
-save(result_df, file = "result_df_big.rda")
+#save
+save(result_df, file = "result_df_full.rda")
 
 #examining results
 result_df
 result_sum <- result_df %>% group_by(player) %>% summarise(total_point = sum(points), mean_choice = mean(choice))
 result_sum
 
-#####plotting#####
-hidden_states <- result_df$hidden_states[result_df$player == "2-ToM"]
-p_op_1 <- c()
-for (i in 1:length(hidden_states)){
-  p_op_1 <- c(p_op_1, p_op_1_k_fun(hidden_states[[i]]))
-}
 
 
-plot(seq(length(hidden_states)), #the trials
-     agent_df$params_p1[[1]]$prop-p_op_1 #the predictions error
-     )
+#######SELF SIMILAR PRIOS #########
 
-dens(p_op_1)
+#New priors for the k-ToM. they assume opponent is similar to self.
+self_similar_priors <- 
+  list(mean_basic = 0, #agnostic
+                   variance_basic = 0, #will be exponated, so exp(0) = 1
+                   mean = 0, #agnostic
+                   variance = c(0,0), #will be exponated, so exp(0) = 1
+                   param_mean = c(-2 , -1), #not agnostic. These will be exponated efore being used as parameters. So this is a prior of exp(0) = 1
+                   gradient = c(0,0) #is zero. in the Matlab script, one parameter was set to 1 if "flag for noisy" was set
+                   )
 
-variance_basic <- c()
-for (i in 1:length(hidden_states)){
-  variance_basic <- c(variance_basic, result_df$hidden_states[result_df$player == "0-ToM"][[i]]$own_hidden_states$variance_basic)
-}
+#Put agents into a dataframe
+agent_df_unprep_selfsim <- create_agents(strategies_unprep, match_up = "RR", prepare_with_defaults = F)
 
-plot(seq(length(hidden_states)), #the trials
-     exp(variance_basic)
-     )
+#Give agents their parameters and priors. Use the self-similar priors for k-ToM.
+agent_df_selfsim <- prepare_df(agent_df_unprep_selfsim, args = rep("k_ToM_priors = self_similar_priors", nrow(agent_df_unprep_selfsim)*2))
+
+#Make all agents in the dataframe compete
+result_df <- compete_all(agent_df_selfsim, n_rounds = 200, 
+        p_matrix = penny_competitive_matrix)
+
+#Save the results
+save(result_df, file = "result_df_full_selfsim.rda")
 ```
 
-```{r beep}
-beepr::beep(4)
+#Plotting
+```{r}
+
 ```
+
 
 #Unused Code
 ```{r}
