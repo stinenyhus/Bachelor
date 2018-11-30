@@ -915,9 +915,9 @@ prepare <- function(strategy_string,
   } else if (grepl("-ToM", strategy_string)) { #if the strategy is a k-ToM
     level <- as.numeric(str_extract(strategy_string, "[0-9]")) #save the level
     params <- list(
-      volatility = log(rnorm(1, mean = exp(k_ToM[1]), sd = k_ToM[2])),
+      volatility = rnorm(1, mean = k_ToM[1], sd = k_ToM[2]),
       volatility_dummy = c(1,0),
-      behavioural_temperature = log(rnorm(1, mean = exp(k_ToM[3]), sd = k_ToM[4])),
+      behavioural_temperature = rnorm(1, mean = exp(k_ToM[3]), sd = k_ToM[4]),
       level = level)
     hidden_states <- rec_prepare_k_ToM(level = level, priors = k_ToM_priors)
     
