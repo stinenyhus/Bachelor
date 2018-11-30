@@ -2,6 +2,7 @@
 p_load(RColorBrewer)
 
 load(file = "result_df_big.rda")
+load(file = "result_df_full.rda")
 head(result_df)
 
 
@@ -85,7 +86,7 @@ quick_heatmap <- function(result_df, return_plot_df = F){
 quick_heatmap(result_df, return_plot_df = F)
 
 
-result_df_sub <- subset(result_df, !(op %in% c("RB", "SoftmaxTitTat", "WSLS")) & !(player %in% c("RB", "SoftmaxTitTat", "WSLS")))
+result_df_sub <- subset(result_df, !(op %in% c("RB", "TFT", "WSLS")) & !(player %in% c("RB", "TFT", "WSLS")))
 quick_heatmap(result_df_sub, return_plot_df = F)
 
 #
@@ -119,7 +120,7 @@ quick_p_k_plot <- function(result_df, ID, blue = T){
   
 }
 
-quick_p_k_plot(result_df, ID = 52, blue = T)
+quick_p_k_plot(result_df, ID = 84, blue = T)
 
 
 #estimation errors

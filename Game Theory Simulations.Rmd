@@ -1189,5 +1189,9 @@ save(result_df, file = "result_df_full_selfsim.rda")
 
 ```
 
+#Play against it code - not implemented
+```{r}
+x <- readline(prompt = "does this work?")
+```
 
 
