@@ -8,15 +8,11 @@ editor_options:
 ---
 
 #Very Nice to do:
-  - Handedness/Bias
   - Add standard deviations to parameter sampling of volatility and temperature - how to limit it to proper values (not negative)
-  - Consider if we can use the decision functions using volatility (see if the 1=0.36 works with other volatility values)
-  - Consider if we can save p_op_1_k and use that instead of p_op_1_k_approx
   - Do multiple simulations
-  - Do evolution
   - Save in compete function should be a list operation
-  - Add a reinforcement learning agent
   - Make a mode where we can play against the agent
+  - Is it called internal states or hidden states?
 
 #Nice to do:
   - Flag for Noisy - making the gradient prior = 1 for bias
@@ -26,6 +22,11 @@ editor_options:
   - add "(Not an error)" to messages which might be misconstrued as an error message
   - add the recursive preperation function to be applied at default if not specified to the k_tom function
   - test whether the compete function works without hidden states specified
+  - Do evolution
+  - Add a reinforcement learning agent
+  - Consider if we can save p_op_1_k and use that instead of p_op_1_k_approx
+  - Consider if we can use the decision functions using volatility (see if the 1=0.36 works with other volatility values)
+  - Handedness/Bias
 
 #Packages and WD
 ```{r setup, include=FALSE}
@@ -179,6 +180,10 @@ softmax <- function(e_payoff_diff, behavioural_temperature){
   #Make an upper bound on softmax's output to avoid getting infinite values when transforming to logodds
   if (p_self_1 > 0.999) {
     p_self_1 = 0.999
+  }
+  #Similarily, make a lower bound
+  if (p_self_1 < 0.001) {
+    p_self_1 = 0.001
   }
   
   return(p_self_1)
@@ -709,6 +714,12 @@ decision_function <- function(
     p_op_1 <- sum(p_op_1_k * p_k)
   }
   
+  if (is.na(p_op_1)) {
+    print(level)
+    print(hidden_states)
+    stop("There's a NaN!")
+  }
+  
   #Calculate the expected payoff difference
   e_payoff_dif <- expected_payoff_difference(p_op_1, player, p_matrix)
   
@@ -1135,13 +1146,6 @@ result_df <- compete_all(agent_df, n_rounds = 200,
 #save
 save(result_df, file = "result_df_full.rda")
 
-#examining results
-result_df
-result_sum <- result_df %>% group_by(player) %>% summarise(total_point = sum(points), mean_choice = mean(choice))
-result_sum
-
-
-
 #######SELF SIMILAR PRIOS #########
 
 #New priors for the k-ToM. they assume opponent is similar to self.
@@ -1161,11 +1165,11 @@ agent_df_unprep_selfsim <- create_agents(strategies_unprep, match_up = "RR", pre
 agent_df_selfsim <- prepare_df(agent_df_unprep_selfsim, args = rep("k_ToM_priors = self_similar_priors", nrow(agent_df_unprep_selfsim)*2))
 
 #Make all agents in the dataframe compete
-result_df <- compete_all(agent_df_selfsim, n_rounds = 200, 
+result_df_selfsim <- compete_all(agent_df_selfsim, n_rounds = 200, 
         p_matrix = penny_competitive_matrix)
 
 #Save the results
-save(result_df, file = "result_df_full_selfsim.rda")
+#save(result_df_selfsim, file = "result_df_full_selfsim.rda")
 ```
 
 #Plotting
