@@ -120,7 +120,7 @@ quick_p_k_plot <- function(result_df, ID, blue = T){
   
 }
 
-quick_p_k_plot(result_df, ID = 84, blue = T)
+quick_p_k_plot(result_df, ID = 2, blue = T)
 
 
 #estimation errors
