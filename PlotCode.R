@@ -177,3 +177,7 @@ for (i in 1:length(hidden_states)){
 plot(seq(length(hidden_states)), #the trials
      (e_p_op_1)
 )
+
+
+test_2 <- "images_someartists\\somegenre_somenumber.png"
+strsplit(test_2, "[_\\ ]+")
