@@ -192,6 +192,50 @@ softmax <- function(e_payoff_diff, behavioural_temperature){
 
 #Simple Agents functions
 ```{r simple agents}
+###Self
+PlaySelf <- function(params = NULL, hidden_states = NULL, player = NULL, p_matrix = NULL, choice_self = NULL, choice_op = NULL, return_hidden_states = F, messages = T){ 
+  #DESCRIPTION
+  #INPUT
+  #OUTPUT
+  
+  if (messages){
+      #Fetch the name if the game
+    game_string <- deparse(substitute(p_matrix))
+    game_string <- str_replace(game_string, "_matrix", "")
+    message(paste("You are currently, playing the ", game_string, " game.",sep = ""))
+    
+    #Responds from last round
+    if (is.null(choice_op) == F){ #if there was a previous round print the result
+      message(paste("Last round you chose: ", choice_self, ". Your opponent chose: ", choice_op, ". Your score was: ", U(choice_self, choice_op, player, p_matrix) ,".", sep = ""))
+      message("If you want to print the payoff matrix again, respond 'print'")
+    } else {
+      message(paste("You are player", player + 1))
+      message("The following is the payoff matrix for this game:")
+      print(p_matrix)
+    }
+  }
+  
+  choice = NA
+  while(choice %in% c(1, 0) == F){ #if they haven't made a valid choice
+    if (choice %in%  c("print", "Print", "'print'")){
+      message(paste("You are player", player + 1))
+      print(p_matrix)
+    } else if (is.na(choice) == F) {
+      message("invalid response, please try again.")
+    }
+    
+    choice <- readline(prompt = "What do you choose this round? Respond 1 or 0: ")
+    
+  }
+
+  
+  if (return_hidden_states == T){
+    return(list(choice = as.numeric(choice), hidden_states = hidden_states))
+  } else {
+    return(as.numeric(choice))
+  }
+}
+
 ###Random Choice with a Bias 
 RB <- function(params, hidden_states = NULL, player = NULL, p_matrix = NULL, choice_self = NULL, choice_op = NULL, return_hidden_states = F){ 
   #RB: Random choice with a bias 
@@ -921,6 +965,10 @@ prepare <- function(strategy_string,
       level = level)
     hidden_states <- rec_prepare_k_ToM(level = level, priors = k_ToM_priors)
     
+  } else if (strategy_string == "PlaySelf") {
+    params <- list(
+      "player" = "A human player is playing")
+    hidden_states <- "None"
   } else { #if no strategy is recognized
     stop("Could not find strategy, try to check for spelling errors")
   }
@@ -1125,7 +1173,7 @@ compete <- function(player1, player2, p1_params, p2_params, p1_hidden_states = N
 }
 ```
 #Simulation
-```{r simulation} 
+```{r simulation}
 #Setting seed
 set.seed(2)
 
@@ -1190,8 +1238,24 @@ result_df_selfsim <- compete_all(agent_df_selfsim, n_rounds = 200,
 #               p_matrix = penny_competitive_matrix, #penny_competitive_matrix #prisoner_matrix
 #               n_rounds = 100
 #               )
-
+ 
 ```
 
+#Play against it code
+```{r} 
+agent_dfVS <- create_agents(c("PlaySelf", "3-ToM"), match_up = "RR", prepare_with_defaults = T)
+
+result_df <- compete(player1 = agent_dfVS$player1,
+              player2 = agent_dfVS$player2,
+              p1_params = agent_dfVS$params_p1,
+              p2_params = agent_dfVS$params_p2,
+              p1_hidden_states = agent_dfVS$hidden_states_p1,
+              p2_hidden_states = agent_dfVS$hidden_states_p2,
+              p_matrix = penny_competitive_matrix, #penny_competitive_matrix #prisoner_matrix
+              n_rounds = 10
+              )
+
+
+```
 
 
