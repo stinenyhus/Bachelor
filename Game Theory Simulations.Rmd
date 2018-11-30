@@ -180,6 +180,10 @@ softmax <- function(e_payoff_diff, behavioural_temperature){
   if (p_self_1 > 0.999) {
     p_self_1 = 0.999
   }
+  #Similarily, make a lower bound
+  if (p_self_1 < 0.001) {
+    p_self_1 = 0.001
+  }
   
   return(p_self_1)
 }
@@ -709,6 +713,12 @@ decision_function <- function(
     p_op_1 <- sum(p_op_1_k * p_k)
   }
   
+  if (is.na(p_op_1)) {
+    print(level)
+    print(hidden_states)
+    stop("There's a NaN!")
+  }
+  
   #Calculate the expected payoff difference
   e_payoff_dif <- expected_payoff_difference(p_op_1, player, p_matrix)
   
@@ -1165,7 +1175,7 @@ result_df <- compete_all(agent_df_selfsim, n_rounds = 200,
         p_matrix = penny_competitive_matrix)
 
 #Save the results
-save(result_df, file = "result_df_full_selfsim.rda")
+#save(result_df, file = "result_df_full_selfsim.rda")
 ```
 
 #Plotting
