@@ -46,7 +46,9 @@ fetch_p_matrix <-  function(game, custom = c(0,0,0,0,0,0,0,0)) {
     p1_choice = c(1, 0, 1, 0),
     p2_choice = c(1, 1, 0, 0),
     p1_reward = c(5, 3, 0, 3),
-    p2_reward = c(5, 0, 3, 3))
+    p2_reward = c(5, 0, 3, 3),
+    game_title = c(game, 
+                   NA,NA,NA))
   return(p_matrix)
   
   } else if (game == "penny_cooperative") {
@@ -55,7 +57,9 @@ fetch_p_matrix <-  function(game, custom = c(0,0,0,0,0,0,0,0)) {
     p1_choice = c(1,  0,  1, 0),
     p2_choice = c(1,  1,  0, 0),
     p1_reward = c(1, -1, -1, 1),
-    p2_reward = c(1, -1, -1, 1))
+    p2_reward = c(1, -1, -1, 1),
+    game_title = c(game, 
+                   NA,NA,NA))
   return(p_matrix)
   
   } else if (game == "penny_competitive") {
@@ -64,7 +68,9 @@ fetch_p_matrix <-  function(game, custom = c(0,0,0,0,0,0,0,0)) {
     p1_choice = c( 1,  0,  1,  0),
     p2_choice = c( 1,  1,  0,  0),
     p1_reward = c(-1,  1,  1, -1),
-    p2_reward = c( 1, -1, -1,  1))
+    p2_reward = c( 1, -1, -1,  1),
+    game_title = c(game, 
+                   NA,NA,NA))
   return(p_matrix)
   
   } else if (game == "prisoners_dilemma") {
@@ -73,7 +79,9 @@ fetch_p_matrix <-  function(game, custom = c(0,0,0,0,0,0,0,0)) {
     p1_choice = c(1, 0, 1, 0),
     p2_choice = c(1, 1, 0, 0),
     p1_reward = c(2, 3,-1, 0),
-    p2_reward = c(2,-1, 3, 0))
+    p2_reward = c(2,-1, 3, 0),
+    game_title = c(game, 
+                   NA,NA,NA))
   return(p_matrix)
   
   } else if (game == "party") {
@@ -82,7 +90,9 @@ fetch_p_matrix <-  function(game, custom = c(0,0,0,0,0,0,0,0)) {
     p1_choice = c(1,  0, 1, 0),
     p2_choice = c(1,  1, 0, 0),
     p1_reward = c(10, 0, 0, 5),
-    p2_reward = c(10, 0, 0, 5))
+    p2_reward = c(10, 0, 0, 5),
+    game_title = c(game, 
+                   NA,NA,NA))
   return(p_matrix)
   
   } else if (game == "sexes") {
@@ -91,7 +101,9 @@ fetch_p_matrix <-  function(game, custom = c(0,0,0,0,0,0,0,0)) {
     p1_choice = c(1,  0, 1, 0),
     p2_choice = c(1,  1, 0, 0),
     p1_reward = c(5,  0, 0, 10),
-    p2_reward = c(10, 0, 0, 5))
+    p2_reward = c(10, 0, 0, 5),
+    game_title = c(game, 
+                   NA,NA,NA))
   return(p_matrix)
   
   } else if (game == "chicken") {
@@ -100,7 +112,9 @@ fetch_p_matrix <-  function(game, custom = c(0,0,0,0,0,0,0,0)) {
     p1_choice = c(1,  0,  1,  0),
     p2_choice = c(1,  1,  0,  0),
     p1_reward = c(0, -1,  1, -1000),
-    p2_reward = c(0,  1, -1, -1000))
+    p2_reward = c(0,  1, -1, -1000),
+    game_title = c(game, 
+                   NA,NA,NA))
   return(p_matrix)
   
   } else if (game == "custom") {
@@ -109,7 +123,9 @@ fetch_p_matrix <-  function(game, custom = c(0,0,0,0,0,0,0,0)) {
     p1_choice = c(1,          0,         1,         0),
     p2_choice = c(1,          1,         0,         0),
     p1_reward = c(custom[1], custom[3],  custom[5], custom[7]),
-    p2_reward = c(custom[2], custom[4],  custom[6], custom[8]))
+    p2_reward = c(custom[2], custom[4],  custom[6], custom[8]),
+    game_title = c(game, 
+                   NA,NA,NA))
   return(p_matrix)
   }
 }
@@ -199,31 +215,55 @@ PlaySelf <- function(params = NULL, hidden_states = NULL, player = NULL, p_matri
   #OUTPUT
   
   if (messages){
-      #Fetch the name if the game
-    game_string <- deparse(substitute(p_matrix))
-    game_string <- str_replace(game_string, "_matrix", "")
-    message(paste("You are currently, playing the ", game_string, " game.",sep = ""))
-    
     #Responds from last round
-    if (is.null(choice_op) == F){ #if there was a previous round print the result
-      message(paste("Last round you chose: ", choice_self, ". Your opponent chose: ", choice_op, ". Your score was: ", U(choice_self, choice_op, player, p_matrix) ,".", sep = ""))
+    if (is.null(choice_op) == F){ #if there was a previous round
+      
+      #Print the choices and rewards form last round
+      message(paste("Last round you chose: ", choice_self, 
+                    ". Your opponent chose: ", choice_op, 
+                    ". Your score was: ", U(choice_self, choice_op, player, p_matrix),
+                    ".", sep = ""))
+      
+      #Remind how to see the payoff matrix
       message("If you want to print the payoff matrix again, respond 'print'")
+      
     } else {
+      #Say which player you are
       message(paste("You are player", player + 1))
+      
+      #Fetch the name if the game and say it
+      game_string <-p_matrix$game_title[1]
+      game_string <- str_replace(game_string, "_matrix", "")
+      message(paste("You are currently playing the ", game_string, " game.",sep = ""))
+      
+      #Show the payoff matrix
       message("The following is the payoff matrix for this game:")
-      print(p_matrix)
+      print(p_matrix[1:4])
     }
   }
   
   choice = NA
-  while(choice %in% c(1, 0) == F){ #if they haven't made a valid choice
-    if (choice %in%  c("print", "Print", "'print'")){
+  while(choice %in% c(1, 0) == F){ #waiting for player to make a choice
+    
+    if (choice %in%  c("print", "Print", "'print'")){ #If they write print
+      
+      #Fetch the name if the game and say it
+      game_string <-p_matrix$game_title[1]
+      game_string <- str_replace(game_string, "_matrix", "")
+      message(paste("You are currently playing the ", game_string, " game.",sep = ""))
+      
+      #Say which player the human is
       message(paste("You are player", player + 1))
-      print(p_matrix)
-    } else if (is.na(choice) == F) {
+      
+      #Print the payoff matrix
+      message("The following is the payoff matrix for this game:")
+      print(p_matrix[1:4])
+      
+    } else if (is.na(choice) == F) { #If they write something that doesn't make sense
       message("invalid response, please try again.")
     }
     
+    #Get choice from player
     choice <- readline(prompt = "What do you choose this round? Respond 1 or 0: ")
     
   }
@@ -1108,14 +1148,18 @@ compete <- function(player1, player2, p1_params, p2_params, p1_hidden_states = N
   strat_p1 <- if_else(grepl("-ToM", player1), "k_ToM", player1)
   strat_p2 <- if_else(grepl("-ToM", player2), "k_ToM", player2)
   
-  #Print current pair
-  message(paste("Current players: ", player1, " vs ", player2, sep = ""))
-  pb <- txtProgressBar(min = 0, max = n_rounds, style = 3)
+  #Progressbar only used if neither player is a human
+  progressbar = strat_p1 != "PlaySelf" & strat_p2 != "PlaySelf"
   
-  for (round in 1:n_rounds){
-   setTxtProgressBar(pb, round)
+  if (progressbar) {
+    #Print current pair
+    message(paste("Current players: ", player1, " vs ", player2, sep = ""))
+    #Create progress bar
+    pb <- txtProgressBar(min = 0, max = n_rounds, style = 3)}
 
-    
+  for (round in 1:n_rounds){
+   
+    if (progressbar) {setTxtProgressBar(pb, round)}
     
       #calls the strategy function for each agent and gives it the player as a argument 
     p1 <- do.call(strat_p1, 
@@ -1168,7 +1212,7 @@ compete <- function(player1, player2, p1_params, p2_params, p1_hidden_states = N
       result_df <- rbind(result_df, round_result)
     }
   }
-  close(pb)
+  if (progressbar) {close(pb)}
   return(result_df)
 }
 ```
@@ -1224,13 +1268,17 @@ result_df_selfsim <- compete_all(agent_df_selfsim, n_rounds = 200,
 
 ### -- MANY SIMS -- ###
 set.seed(2)
+
+#number of simulations and rounds
 nsims = 100
 nrounds = 200
 
+#set strategies
 strategies_unprep <- c("RB", "0-ToM")
 
 result_df_multiple <- NULL
 
+#Run the competition as nsim times. Save it in one dataset
 for (sim in 1:nsims) {
   agent_df <- create_agents(strategies_unprep, match_up = "RR", prepare_with_defaults = T)
   result_df_single <- compete_all(agent_df, n_rounds = nrounds, 
@@ -1238,14 +1286,16 @@ for (sim in 1:nsims) {
   result_df_multiple <- rbind(result_df_multiple, result_df_single)
 }
 
+#save the results
 result_df_RB_0ToM <- result_df_multiple
 
 ### --- ###
-
+#set strategies
 strategies_unprep <- c("0-ToM", "2-ToM")
 
 result_df_multiple <- NULL
 
+#Run the competition as nsim times. Save it in one dataset
 for (sim in 1:nsims) {
   agent_df <- create_agents(strategies_unprep, match_up = "RR", prepare_with_defaults = T)
   result_df_single <- compete_all(agent_df, n_rounds = nrounds, 
@@ -1253,15 +1303,17 @@ for (sim in 1:nsims) {
   result_df_multiple <- rbind(result_df_multiple, result_df_single)
 }
 
+#save the results
 result_df_0ToM_2ToM <- result_df_multiple
 
 
 ### --- ###
-
+#set strategies
 strategies_unprep <- c("2-ToM", "5-ToM")
 
 result_df_multiple <- NULL
 
+#Run the competition as nsim times. Save it in one dataset
 for (sim in 1:nsims) {
   agent_df <- create_agents(strategies_unprep, match_up = "RR", prepare_with_defaults = T)
   result_df_single <- compete_all(agent_df, n_rounds = nrounds, 
@@ -1269,6 +1321,7 @@ for (sim in 1:nsims) {
   result_df_multiple <- rbind(result_df_multiple, result_df_single)
 }
 
+#save the results
 result_df_2ToM_5ToM <- result_df_multiple
 
 
@@ -1284,9 +1337,9 @@ result_df_RB_0ToM$sim <- sim_nr
 result_df_0ToM_2ToM$sim <- sim_nr
 result_df_2ToM_5ToM$sim <- sim_nr
 
-save(result_df_RB_0ToM, file = "result_df_RB_0ToM.rda")
-save(result_df_0ToM_2ToM, file = "result_df_0ToM_2ToM.rda")
-save(result_df_2ToM_5ToM, file = "result_df_2ToM_5ToM.rda")
+# save(result_df_RB_0ToM, file = "result_df_RB_0ToM.rda")
+# save(result_df_0ToM_2ToM, file = "result_df_0ToM_2ToM.rda")
+# save(result_df_2ToM_5ToM, file = "result_df_2ToM_5ToM.rda")
 
 
 ```
@@ -1310,23 +1363,39 @@ save(result_df_2ToM_5ToM, file = "result_df_2ToM_5ToM.rda")
 #               n_rounds = 100
 #               )
  
+# name_to_text <- function(v1) {
+#   deparse(substitute(v1))
+# }
+# 
+# LOPS <- function(matrixie) {
+#   name_to_text(matrixie)
+# }
+# 
+# LOPS(penny_competitive_matrix)
+# 
+# myfunc(penny_competitive_matrix)
+# 
+
 ```
 
 #Human Player code
-```{r} 
-agent_dfVS <- create_agents(c("PlaySelf", "3-ToM"), match_up = "RR", prepare_with_defaults = T)
+```{r}
+#Fetch payoff-matrix
+penny_competitive_matrix = fetch_p_matrix("penny_competitive")
+p_matrix = penny_competitive_matrix
+#Set opponent
+agent_dfVS <- create_agents(c("PlaySelf", "RB"), match_up = "RR", prepare_with_defaults = T)
 
-result_df <- compete(player1 = agent_dfVS$player1,
+#Run game
+result_df_player <- compete(player1 = agent_dfVS$player1,
               player2 = agent_dfVS$player2,
               p1_params = agent_dfVS$params_p1,
               p2_params = agent_dfVS$params_p2,
               p1_hidden_states = agent_dfVS$hidden_states_p1,
               p2_hidden_states = agent_dfVS$hidden_states_p2,
-              p_matrix = penny_competitive_matrix, #penny_competitive_matrix #prisoner_matrix
+              p_matrix = penny_competitive_matrix, 
               n_rounds = 10
               )
-
-
 ```
 
 
