@@ -8,10 +8,6 @@ editor_options:
 ---
 
 #Very Nice to do:
-  - Add standard deviations to parameter sampling of volatility and temperature - how to limit it to proper values (not negative)
-  - Do multiple simulations
-  - Save in compete function should be a list operation
-  - Make a mode where we can play against the agent
   - Is it called internal states or hidden states?
 
 #Nice to do:
@@ -27,6 +23,7 @@ editor_options:
   - Consider if we can save p_op_1_k and use that instead of p_op_1_k_approx
   - Consider if we can use the decision functions using volatility (see if the 1=0.36 works with other volatility values)
   - Handedness/Bias
+  - Save in compete function should be a list operation
 
 #Packages and WD
 ```{r setup, include=FALSE}
@@ -1266,6 +1263,24 @@ result_df_selfsim <- compete_all(agent_df_selfsim, n_rounds = 200,
 #Save the results
 #save(result_df_selfsim, file = "result_df_full_selfsim.rda")
 
+
+### --- PARAMETER DISTRIBUTIONS --- ###
+
+k_ToM_params_distribution =
+  c(volatility_mean = -2,
+    volatility_sd = 10,
+    temperature_mean = -1,
+    temperature_sd = 10)
+
+agent_df_unprep_distribution <- create_agents(strategies_unprep, match_up = "RR", prepare_with_defaults = F)
+
+#Give agents their parameters and priors. Use the self-similar priors for k-ToM.
+agent_df_distribution <- prepare_df(agent_df_unprep_distribution, args = rep("k_ToM = k_ToM_params_distribution", nrow(agent_df_unprep_distribution)*2))
+
+#Make all agents in the dataframe compete
+result_df_distribution <- compete_all(agent_df_distribution, n_rounds = 10, 
+        p_matrix = penny_competitive_matrix)
+
 ### -- MANY SIMS -- ###
 set.seed(2)
 
@@ -1380,22 +1395,22 @@ result_df_2ToM_5ToM$sim <- sim_nr
 
 #Human Player code
 ```{r}
-#Fetch payoff-matrix
-penny_competitive_matrix = fetch_p_matrix("penny_competitive")
-p_matrix = penny_competitive_matrix
-#Set opponent
-agent_dfVS <- create_agents(c("PlaySelf", "RB"), match_up = "RR", prepare_with_defaults = T)
-
-#Run game
-result_df_player <- compete(player1 = agent_dfVS$player1,
-              player2 = agent_dfVS$player2,
-              p1_params = agent_dfVS$params_p1,
-              p2_params = agent_dfVS$params_p2,
-              p1_hidden_states = agent_dfVS$hidden_states_p1,
-              p2_hidden_states = agent_dfVS$hidden_states_p2,
-              p_matrix = penny_competitive_matrix, 
-              n_rounds = 10
-              )
+# #Fetch payoff-matrix
+# penny_competitive_matrix = fetch_p_matrix("penny_competitive")
+# p_matrix = penny_competitive_matrix
+# #Set opponent
+# agent_dfVS <- create_agents(c("PlaySelf", "RB"), match_up = "RR", prepare_with_defaults = T)
+# 
+# #Run game
+# result_df_player <- compete(player1 = agent_dfVS$player1,
+#               player2 = agent_dfVS$player2,
+#               p1_params = agent_dfVS$params_p1,
+#               p2_params = agent_dfVS$params_p2,
+#               p1_hidden_states = agent_dfVS$hidden_states_p1,
+#               p2_hidden_states = agent_dfVS$hidden_states_p2,
+#               p_matrix = penny_competitive_matrix, 
+#               n_rounds = 10
+#               )
 ```
 
 
