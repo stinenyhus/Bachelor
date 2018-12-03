@@ -1276,7 +1276,7 @@ result_df_2ToM_5ToM <- result_df_multiple
 sim_nr <- NULL
 
 for (sim in 1:nsims){
-  tmp < -rep(sim, nrounds)
+  tmp <- rep(sim, nrounds)
   sim_nr <- c(sim_nr, tmp)
 }
 
