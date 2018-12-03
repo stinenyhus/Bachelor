@@ -957,8 +957,8 @@ rec_prepare_k_ToM <- function(level, priors = "default") {
 #Prepare agents functions
 ```{r prepare}
 prepare <- function(strategy_string,
-                    RB = c(prop_mean = 0.7,
-                           prop_sd = 0.01),
+                    RB = c(prop_mean = 0.8,
+                           prop_sd = 0.1),
                     WSLS = c(stay_mean = 0.9,
                              stay_sd = 0.1,
                              switch_mean = 0.9,
@@ -966,9 +966,9 @@ prepare <- function(strategy_string,
                     TFT = c(prob_mean = 0.9,
                             prob_sd = 0.1),
                     k_ToM = c(volatility_mean = -2,
-                              volatility_sd = 0,
+                              volatility_sd = 0.1,
                               temperature_mean = -1,
-                              temperature_sd = 0),
+                              temperature_sd = 0.1),
                     k_ToM_priors = "default"){  
   #INPUT
     #strategy_string: A string of the strategy the agents should apply
@@ -1268,9 +1268,9 @@ result_df_selfsim <- compete_all(agent_df_selfsim, n_rounds = 200,
 
 k_ToM_params_distribution =
   c(volatility_mean = -2,
-    volatility_sd = 10,
+    volatility_sd = 1,
     temperature_mean = -1,
-    temperature_sd = 10)
+    temperature_sd = 1)
 
 agent_df_unprep_distribution <- create_agents(strategies_unprep, match_up = "RR", prepare_with_defaults = F)
 
@@ -1278,8 +1278,11 @@ agent_df_unprep_distribution <- create_agents(strategies_unprep, match_up = "RR"
 agent_df_distribution <- prepare_df(agent_df_unprep_distribution, args = rep("k_ToM = k_ToM_params_distribution", nrow(agent_df_unprep_distribution)*2))
 
 #Make all agents in the dataframe compete
-result_df_distribution <- compete_all(agent_df_distribution, n_rounds = 10, 
+result_df_distribution <- compete_all(agent_df_distribution, n_rounds = 200, 
         p_matrix = penny_competitive_matrix)
+
+#Save the results
+save(result_df_distribution, file = "result_df_distribution.rda")
 
 ### -- MANY SIMS -- ###
 set.seed(2)
