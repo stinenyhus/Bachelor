@@ -6,7 +6,6 @@ output: html_document
 editor_options: 
   chunk_output_type: console
 ---
-
 #Very Nice to do:
   - Is it called internal states or hidden states?
 
@@ -387,7 +386,7 @@ basic_mean_update <- function(prev_hidden_states, choices, variance_basic) {
   variance_basic #the uncertainty of opponent probability
   
   #prepare variance
-  variance <- exp(variance_basic)
+  variance_basic <- exp(variance_basic)
   
   #calculate the new mean
   mean_basic <- prev_mean_basic + variance_basic * (prev_c_op - inv.logit(prev_mean_basic))
@@ -1288,7 +1287,7 @@ save(result_df_distribution, file = "result_df_distribution.rda")
 set.seed(2)
 
 #number of simulations and rounds
-nsims = 100
+nsims = 10
 nrounds = 200
 
 #set strategies
@@ -1354,6 +1353,18 @@ for (sim in 1:nsims){
 result_df_RB_0ToM$sim <- sim_nr
 result_df_0ToM_2ToM$sim <- sim_nr
 result_df_2ToM_5ToM$sim <- sim_nr
+
+result_sum <- result_df_RB_0ToM %>% 
+  group_by(player) %>% 
+  summarise(total_point = sum(points), mean_choice = mean(choice)) %>% 
+  arrange(desc(total_point))
+
+result_sum <- result_df_0ToM_2ToM %>% 
+  group_by(player) %>% 
+  summarise(total_point = sum(points), mean_choice = mean(choice)) %>% 
+  arrange(desc(total_point))
+
+result_sum
 
 # save(result_df_RB_0ToM, file = "result_df_RB_0ToM.rda")
 # save(result_df_0ToM_2ToM, file = "result_df_0ToM_2ToM.rda")
