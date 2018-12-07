@@ -1,0 +1,1 @@
+\Sigma ^{ k,\kappa  }\approx \left( \Sigma ^{ k,\kappa ,p } \right) ^{ T }\cdot W^{ k,\kappa ,p }

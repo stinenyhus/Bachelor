@@ -1260,7 +1260,7 @@ result_df_selfsim <- compete_all(agent_df_selfsim, n_rounds = 200,
         p_matrix = penny_competitive_matrix)
 
 #Save the results
-#save(result_df_selfsim, file = "result_df_full_selfsim.rda")
+save(result_df_selfsim, file = "result_df_full_selfsim.rda")
 
 
 ### --- PARAMETER DISTRIBUTIONS --- ###
@@ -1271,6 +1271,7 @@ k_ToM_params_distribution =
     temperature_mean = -1,
     temperature_sd = 1)
 
+#Make the agents with the distributed parameter values
 agent_df_unprep_distribution <- create_agents(strategies_unprep, match_up = "RR", prepare_with_defaults = F)
 
 #Give agents their parameters and priors. Use the self-similar priors for k-ToM.
@@ -1287,7 +1288,7 @@ save(result_df_distribution, file = "result_df_distribution.rda")
 set.seed(2)
 
 #number of simulations and rounds
-nsims = 10
+nsims = 100
 nrounds = 200
 
 #set strategies
@@ -1323,7 +1324,6 @@ for (sim in 1:nsims) {
 #save the results
 result_df_0ToM_2ToM <- result_df_multiple
 
-
 ### --- ###
 #set strategies
 strategies_unprep <- c("2-ToM", "5-ToM")
@@ -1341,7 +1341,6 @@ for (sim in 1:nsims) {
 #save the results
 result_df_2ToM_5ToM <- result_df_multiple
 
-
 ### --- ###
 sim_nr <- NULL
 
@@ -1354,22 +1353,9 @@ result_df_RB_0ToM$sim <- sim_nr
 result_df_0ToM_2ToM$sim <- sim_nr
 result_df_2ToM_5ToM$sim <- sim_nr
 
-result_sum <- result_df_RB_0ToM %>% 
-  group_by(player) %>% 
-  summarise(total_point = sum(points), mean_choice = mean(choice)) %>% 
-  arrange(desc(total_point))
-
-result_sum <- result_df_0ToM_2ToM %>% 
-  group_by(player) %>% 
-  summarise(total_point = sum(points), mean_choice = mean(choice)) %>% 
-  arrange(desc(total_point))
-
-result_sum
-
-# save(result_df_RB_0ToM, file = "result_df_RB_0ToM.rda")
-# save(result_df_0ToM_2ToM, file = "result_df_0ToM_2ToM.rda")
-# save(result_df_2ToM_5ToM, file = "result_df_2ToM_5ToM.rda")
-
+save(result_df_RB_0ToM, file = "result_df_RB_0ToM.rda")
+save(result_df_0ToM_2ToM, file = "result_df_0ToM_2ToM.rda")
+save(result_df_2ToM_5ToM, file = "result_df_2ToM_5ToM.rda")
 
 ```
 
