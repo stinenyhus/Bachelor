@@ -1,0 +1,1 @@
+{ \mu  }_{ t }^{ k,\kappa ,p }\quad \approx \quad { \mu  }_{ t-1 }^{ k,\kappa ,p }\quad +\quad { W }_{ t-1 }^{ k,\kappa ,p }\quad { \Sigma  }_{ t }^{ k,\kappa ,p }\quad { \lambda  }_{ t }^{ k,\kappa  }\quad ({ c }_{ t-1 }^{ op }\quad -\quad s({ \mu  }_{ t-1 }^{ k,\kappa ,p }))

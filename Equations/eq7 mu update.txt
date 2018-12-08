@@ -1,1 +1,0 @@
-{ \mu  }_{ t }^{ k,\kappa  }\quad \approx \quad { \mu  }_{ t-1 }^{ k,\kappa  }\quad +\quad { \lambda  }_{ t }^{ \kappa  }{ \quad \Sigma  }_{ t }^{ k,\kappa  }{ \quad W }_{ t-1 }^{ \quad \kappa  }({ c }_{ t-1 }^{ op }\quad -\quad s\circ { v }^{ \kappa  }({ \mu  }_{ t-1 }^{ k,\kappa  }))

@@ -1232,7 +1232,7 @@ result_df <- compete_all(agent_df, n_rounds = 200,
         p_matrix = penny_competitive_matrix)
 
 #save
-save(result_df, file = "result_df_full.rda")
+#save(result_df, file = "result_df_full.rda")
 
 ### -- SELF SIMILAR PRIORS -- ###
 
@@ -1261,6 +1261,7 @@ result_df_selfsim <- compete_all(agent_df_selfsim, n_rounds = 200,
 
 #Save the results
 save(result_df_selfsim, file = "result_df_full_selfsim.rda")
+rm(result_df_selfsim)
 
 
 ### --- PARAMETER DISTRIBUTIONS --- ###
@@ -1283,6 +1284,7 @@ result_df_distribution <- compete_all(agent_df_distribution, n_rounds = 200,
 
 #Save the results
 save(result_df_distribution, file = "result_df_distribution.rda")
+rm(result_df_distribtuion)
 
 ### -- MANY SIMS -- ###
 set.seed(2)
@@ -1290,6 +1292,16 @@ set.seed(2)
 #number of simulations and rounds
 nsims = 100
 nrounds = 200
+
+#make list of sim numbers to add to finished df's
+sim_nr <- NULL
+
+for (sim in 1:nsims){
+  tmp <- rep(sim, nrounds)
+  sim_nr <- c(sim_nr, tmp)
+}
+
+### RB v 0ToM
 
 #set strategies
 strategies_unprep <- c("RB", "0-ToM")
@@ -1304,10 +1316,16 @@ for (sim in 1:nsims) {
   result_df_multiple <- rbind(result_df_multiple, result_df_single)
 }
 
-#save the results
+#Proper variable name
 result_df_RB_0ToM <- result_df_multiple
+#Add simulation number
+result_df_RB_0ToM$sim <- sim_nr
+#Save
+save(result_df_RB_0ToM, file = "result_df_RB_0ToM.rda")
+rm(result_df_RB_0ToM)
 
 ### --- ###
+### 0ToM v 2ToM
 #set strategies
 strategies_unprep <- c("0-ToM", "2-ToM")
 
@@ -1323,8 +1341,12 @@ for (sim in 1:nsims) {
 
 #save the results
 result_df_0ToM_2ToM <- result_df_multiple
+result_df_0ToM_2ToM$sim <- sim_nr
+save(result_df_0ToM_2ToM, file = "result_df_0ToM_2ToM.rda")
+rm(result_df_0ToM_2ToM)
 
 ### --- ###
+### 2ToM v 5ToM
 #set strategies
 strategies_unprep <- c("2-ToM", "5-ToM")
 
@@ -1340,22 +1362,8 @@ for (sim in 1:nsims) {
 
 #save the results
 result_df_2ToM_5ToM <- result_df_multiple
-
-### --- ###
-sim_nr <- NULL
-
-for (sim in 1:nsims){
-  tmp <- rep(sim, nrounds)
-  sim_nr <- c(sim_nr, tmp)
-}
-
-result_df_RB_0ToM$sim <- sim_nr
-result_df_0ToM_2ToM$sim <- sim_nr
 result_df_2ToM_5ToM$sim <- sim_nr
-
-save(result_df_RB_0ToM, file = "result_df_RB_0ToM.rda")
-save(result_df_0ToM_2ToM, file = "result_df_0ToM_2ToM.rda")
-save(result_df_2ToM_5ToM, file = "result_df_2ToM_5ToM.rda")
+rm(result_df_2ToM_5ToM)
 
 ```
 
