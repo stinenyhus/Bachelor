@@ -1284,7 +1284,7 @@ result_df_distribution <- compete_all(agent_df_distribution, n_rounds = 200,
 
 #Save the results
 save(result_df_distribution, file = "result_df_distribution.rda")
-rm(result_df_distribtuion)
+rm(result_df_distribution)
 
 ### -- MANY SIMS -- ###
 set.seed(2)
@@ -1363,6 +1363,7 @@ for (sim in 1:nsims) {
 #save the results
 result_df_2ToM_5ToM <- result_df_multiple
 result_df_2ToM_5ToM$sim <- sim_nr
+save(result_df_2ToM_5ToM, file = "result_df_2ToM_5ToM.rda")
 rm(result_df_2ToM_5ToM)
 
 ```
