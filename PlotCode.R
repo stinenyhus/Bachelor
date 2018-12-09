@@ -193,3 +193,9 @@ plot(seq(length(hidden_states)), #the trials
 
 test_2 <- "images_someartists\\somegenre_somenumber.png"
 strsplit(test_2, "[_\\ ]+")
+
+
+#lav kommulativ pr. sim og så plot den kom. pr. sim ifht. round_nr
+#Også gør det for 2ToMvs 0ToM 
+
+#lignende for p_k med estimation af modstanderens reelle level
