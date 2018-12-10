@@ -1,0 +1,1 @@
+{ { \mu  } }_{ t }^{ 0 }\quad \approx \quad { { \mu  } }_{ t-1 }\quad +\quad { \Sigma  }_{ t }^{ 0 }({ c }_{ t-1 }^{ op }\quad -\quad s({ { \mu  } }_{ t-1 }))\quad 

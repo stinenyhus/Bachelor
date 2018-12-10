@@ -1,13 +1,18 @@
 
 p_load(RColorBrewer)
 
-load(file = "result_df_big.rda")
+#loading large datasets
 load(file = "result_df_full.rda")
-head(result_df)
+load(file = "result_df_full_selfsim.rda")
+load(file = "result_df_distribution.rda")
+#loading 1v1 datasets
+load(file = "result_df_RB_0ToM.rda")
+load(file = "result_df_0ToM_2ToM.rda")
+load(file = "result_df_2ToM_5ToM.rda")
 
+result_df = result_df_2ToM_5ToM
 
-
-### CREATING PLOTTING FUNCTIONS ###
+### CREATING PLOTTING FUNCTIONS ###,l
 
   #add ID function
 add_ID <- function(result_df, add_op = F){
@@ -37,6 +42,12 @@ result_sum <- result_df %>%
   group_by(ID, player, op) %>% 
   summarise(total_point = sum(points), mean_choice = mean(choice)) %>% 
   arrange(desc(total_point))
+
+result_sum <- result_df %>% 
+  group_by(sim, player, op) %>% 
+  summarise(total_point = sum(points), mean_choice = mean(choice)) %>% 
+  arrange(desc(total_point))
+
 result_sum
 
 result_sum_sub <- subset(result_sum, !(op %in% c("RB", "SoftmaxTitTat", "WSLS")) & !(player %in% c("RB", "SoftmaxTitTat", "WSLS")) )
@@ -182,3 +193,9 @@ plot(seq(length(hidden_states)), #the trials
 
 test_2 <- "images_someartists\\somegenre_somenumber.png"
 strsplit(test_2, "[_\\ ]+")
+
+
+#lav kommulativ pr. sim og så plot den kom. pr. sim ifht. round_nr
+#Også gør det for 2ToMvs 0ToM 
+
+#lignende for p_k med estimation af modstanderens reelle level
