@@ -1294,12 +1294,7 @@ nsims = 100
 nrounds = 200
 
 #make list of sim numbers to add to finished df's
-sim_nr <- NULL
-
-for (sim in 1:nsims){
-  tmp <- rep(sim, nrounds)
-  sim_nr <- c(sim_nr, tmp)
-}
+sim_nr <- sort(rep(seq(1,nsims),2*nrounds))
 
 ### RB v 0ToM
 
@@ -1323,6 +1318,28 @@ result_df_RB_0ToM$sim <- sim_nr
 #Save
 save(result_df_RB_0ToM, file = "result_df_RB_0ToM.rda")
 rm(result_df_RB_0ToM)
+
+### --- ###
+### 0ToM v 1ToM
+#set strategies
+strategies_unprep <- c("0-ToM", "1-ToM")
+
+result_df_multiple <- NULL
+
+#Run the competition as nsim times. Save it in one dataset
+for (sim in 1:nsims) {
+  agent_df <- create_agents(strategies_unprep, match_up = "RR", prepare_with_defaults = T)
+  result_df_single <- compete_all(agent_df, n_rounds = nrounds, 
+        p_matrix = penny_competitive_matrix)
+  result_df_multiple <- rbind(result_df_multiple, result_df_single)
+}
+
+#save the results
+result_df_0ToM_1ToM <- result_df_multiple
+result_df_0ToM_1ToM$sim <- sim_nr
+save(result_df_0ToM_1ToM, file = "result_df_0ToM_1ToM.rda")
+rm(result_df_0ToM_1ToM)
+
 
 ### --- ###
 ### 0ToM v 2ToM
