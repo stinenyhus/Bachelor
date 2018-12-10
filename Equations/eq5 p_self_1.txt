@@ -1,1 +1,0 @@
-P({ c }^{ self }\quad =\quad 1)\quad =\quad \frac { 1 }{ 1\quad +\quad exp(-\frac { \Delta V }{ \beta  } ) } 

@@ -1,1 +1,0 @@
-p^{ op,\kappa  }_{ t-1 }\approx s\left( \frac { \mu ^{ k,\kappa}_{ t-1 }+b\cdot \left( \Sigma ^{ k,\kappa  }_{ t-1 } \right) ^{ c } }{ \sqrt { 1+a\cdot \left( \Sigma ^{ k,\kappa  }_{ t-1 } \right) ^{ d } }  }  \right) 

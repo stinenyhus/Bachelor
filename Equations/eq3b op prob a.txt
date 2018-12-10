@@ -1,1 +1,0 @@
-{ \hat { p }  }_{ t }^{ op }\approx s\left( \frac { \mu _{ t }^{ 0 } }{ \sqrt { 1+a\cdot \Sigma ^{ 0 }_{ t } }  }  \right) 

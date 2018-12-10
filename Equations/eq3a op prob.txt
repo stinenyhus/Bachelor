@@ -1,1 +1,0 @@
-{ \hat { p }  }_{ t }^{ op }\approx s\left( \frac { \mu _{ t }^{ 0 } }{ \sqrt { 1+(\Sigma ^{ 0 }_{ t }+\sigma ^{ 0 })3/\pi ^{ 2 } }  }  \right) 
