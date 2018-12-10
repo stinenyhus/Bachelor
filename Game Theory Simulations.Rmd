@@ -1342,6 +1342,28 @@ rm(result_df_0ToM_1ToM)
 
 
 ### --- ###
+### 1ToM v 2ToM
+#set strategies
+strategies_unprep <- c("1-ToM", "2-ToM")
+
+result_df_multiple <- NULL
+
+#Run the competition as nsim times. Save it in one dataset
+for (sim in 1:nsims) {
+  agent_df <- create_agents(strategies_unprep, match_up = "RR", prepare_with_defaults = T)
+  result_df_single <- compete_all(agent_df, n_rounds = nrounds, 
+        p_matrix = penny_competitive_matrix)
+  result_df_multiple <- rbind(result_df_multiple, result_df_single)
+}
+
+#save the results
+result_df_1ToM_2ToM <- result_df_multiple
+result_df_1ToM_2ToM$sim <- sim_nr
+save(result_df_1ToM_2ToM, file = "result_df_1ToM_2ToM.rda")
+rm(result_df_1ToM_2ToM)
+
+
+### --- ###
 ### 0ToM v 2ToM
 #set strategies
 strategies_unprep <- c("0-ToM", "2-ToM")
@@ -1382,6 +1404,27 @@ result_df_2ToM_5ToM <- result_df_multiple
 result_df_2ToM_5ToM$sim <- sim_nr
 save(result_df_2ToM_5ToM, file = "result_df_2ToM_5ToM.rda")
 rm(result_df_2ToM_5ToM)
+
+### --- ###
+### 4ToM v 5ToM
+#set strategies
+strategies_unprep <- c("4-ToM", "5-ToM")
+
+result_df_multiple <- NULL
+
+#Run the competition as nsim times. Save it in one dataset
+for (sim in 1:nsims) {
+  agent_df <- create_agents(strategies_unprep, match_up = "RR", prepare_with_defaults = T)
+  result_df_single <- compete_all(agent_df, n_rounds = nrounds, 
+        p_matrix = penny_competitive_matrix)
+  result_df_multiple <- rbind(result_df_multiple, result_df_single)
+}
+
+#save the results
+result_df_4ToM_5ToM <- result_df_multiple
+result_df_4ToM_5ToM$sim <- sim_nr
+save(result_df_4ToM_5ToM, file = "result_df_4ToM_5ToM.rda")
+rm(result_df_4ToM_5ToM)
 
 ```
 
