@@ -1,1 +1,0 @@
-{ \Sigma  }_{ t }^{ k,\kappa ,p }\quad \approx \quad \frac { 1 }{ \frac { 1 }{ { \Sigma  }_{ t-1 }^{ k,\kappa ,p }+{ \sigma  }^{ k } } \quad +\quad s({ { \mu  } }_{ t-1 }^{ k,\kappa ,p })\quad (1-s({ { \mu  } }_{ t-1 }^{ k,\kappa ,p }))\quad { \lambda  }_{ t }^{ k,\kappa  }\quad \left( { W }_{ t-1 }^{ k,\kappa ,p } \right) ^{ 2 }} 
