@@ -1,0 +1,1 @@
+\Sigma ^{ k,\kappa  }_{ t-1 }\approx \left( \Sigma ^{ k,\kappa ,p }_{ t-1 } \right) ^{ T } \left( W^{ k,\kappa ,p }_{ t-1 } \right) ^{ 2 }

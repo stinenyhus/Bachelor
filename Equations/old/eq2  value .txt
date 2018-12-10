@@ -1,1 +1,0 @@
-\Delta V\quad =\quad { p }^{ op }(U(1,\quad 1)\quad -\quad U(0,\quad 1))\quad +\quad (1-{ p }^{ op })(U(0,0)\quad -\quad U(0,0))
