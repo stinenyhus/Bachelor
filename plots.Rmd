@@ -1,0 +1,376 @@
+---
+title: "plots"
+author: "K. Enevoldsen & P. Waade"
+date: "12/10/2018"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+#Setup
+```{r setup, include=FALSE}
+# !diagnostics off
+#^the above argument prevents the mulitple 'unknown column' warnings (harmless warnings)
+knitr::opts_chunk$set(echo = TRUE)
+#devtools::install_github("thomasp85/patchwork")
+pacman::p_load(pacman, plyr, tidyverse, raster, reshape2, knitr, brms, boot, rethinking, groupdata2, patchwork, RColorBrewer, Hmisc)
+```
+
+#load data
+```{r}
+#loading large datasets
+load(file = "result_df_full.rda")
+load(file = "result_df_full_selfsim.rda")
+  #load(file = "result_df_distribution.rda")  #What is this used for peter?
+```
+
+#add ID
+```{r add_ID}
+add_ID <- function(result_df, add_op = F){
+  #DESCRIPTION
+  #INPUT
+  #OUTPUT
+  
+  n_rounds <- max(result_df$round_nr)
+  n_players <- nrow(result_df)/n_rounds
+  result_df$ID <- as.numeric( #as. numeric since sapply returns a matrix
+                    sapply(seq(1, n_players, by = 2), #creating a list of the first agent in each pair (jumping by two since it is a pair) 
+                    function(x) rep(c(x, x+1), n_rounds))) #creating ID for each pair equal to x and x+1 and repeating for each round
+  
+  if (add_op){
+    result_df$op <- sapply(seq(nrow(result_df)), 
+                          function(x) 
+                          str_split(result_df$pair[x], " / ")[[1]][str_split(result_df$pair[x], " / ")[[1]] !=  result_df$player[x]])
+  }
+  
+  
+  return(result_df)
+}
+```
+
+#minor calc.
+```{r}
+result_df <- add_ID(result_df, add_op = T)
+result_sum <- result_df %>% 
+  group_by(ID, player, op) %>% 
+  summarise(total_point = sum(points), mean_choice = mean(choice)) %>% 
+  arrange(desc(total_point))
+
+# result_sum <- result_df %>% 
+#   group_by(sim, player, op) %>% 
+#   summarise(total_point = sum(points), mean_choice = mean(choice)) %>% 
+#   arrange(desc(total_point))
+
+
+result_sum
+
+result_sum_sub <- subset(result_sum, !(op %in% c("RB", "SoftmaxTitTat", "WSLS")) & !(player %in% c("RB", "SoftmaxTitTat", "WSLS")) )
+```
+
+#heatmap
+```{r heatmap}
+
+  #create a compete matrix
+quick_heatmap <- function(result_df, return_plot_df = F){
+  #DESCRIPTION
+  #INPUT
+  #OUTPUT
+  
+  tmp_list <- NULL; i = 1
+  for (c_pair in unique(result_df$pair)){ #loop through all the pairs
+    p_subset <- subset(result_df, pair == c_pair)
+    
+      #Player 1
+    player <- p_subset$player[1]
+    op <- p_subset$player[2]
+    points <- sum(p_subset$points[seq(1, nrow(p_subset), by = 2)]) #calculate points
+    
+    tmp_list[[i]] <- data_frame(player = player, op = op, points = points) #save the variables
+    
+      #Player 2
+    player <- p_subset$player[2]
+    op <- p_subset$player[1]
+    points <- sum(p_subset$points[seq(2, nrow(p_subset), by = 2)]) #calculate points
+    
+    tmp_list[[i+1]] <- data_frame(player = player, op = op, points = points) #save the variables
+    i = i + 2
+  }
+  i
+  tmp_df <- tmp_list %>% bind_rows() #save the variables
+  
+  unique(tmp_df$player)
+  
+  p <- ggplot(tmp_df, aes(player, op)) + 
+      geom_tile(aes(fill = points), colour = "white") + 
+      scale_fill_gradient(name = "Points", low = "lightsteelblue1", high = "steelblue") +  
+      theme_classic() + labs(x = "Player 1", y = "Player 2") 
+  
+  if (return_plot_df){
+    return(list(plot = p, plot_df = tmp_df))
+  } else{
+    return(p)
+  }
+}
+```
+
+#saving plots
+```{r} 
+quick_heatmap(result_df, return_plot_df = F) 
+ggsave("heatmap_standard.png", width = 20, height = 18, units = "cm", path = "plots") 
+
+quick_heatmap(result_df = result_df_selfsim, return_plot_df = F)
+ggsave("heatmap_selfsim.png", width = 20, height = 18, units = "cm", path = "plots")
+
+result_df <- add_ID(result_df, add_op = T)
+result_df_sub <- subset(result_df, !(op %in% c("TFT", "WSLS", "RB")) & !(player %in% c("TFT", "WSLS", "RB")))
+quick_heatmap(result_df_sub, return_plot_df = F)
+ggsave("heatmap_standard_no_simple.png", width = 20, height = 18, units = "cm", path = "plots")
+
+result_df_selfsim <- add_ID(result_df_selfsim, add_op = T)
+result_df_sub <- subset(result_df_selfsim, !(op %in% c("TFT", "WSLS", "RB")) & !(player %in% c("TFT", "WSLS", "RB")))
+quick_heatmap(result_df_sub, return_plot_df = F)
+ggsave("heatmap_selfsim_no_simple.png", width = 20, height = 18, units = "cm", path = "plots")
+```
+
+#P(k) plot
+```{r quick_p_k_plot} 
+ 
+quick_p_k_plot <- function(result_df, ID, blue = T){
+  
+  p_k_v <- c()
+  hidden_states <- result_df$hidden_states[result_df$ID == ID]
+  for (i in 1:length(hidden_states)){
+    p_k_v <- c(p_k_v, hidden_states[[i]]$own_hidden_states$p_k)
+  }
+  level <- length(p_k_v)/length(hidden_states)
+  plot_df <- data_frame(round = seq(length(hidden_states)))
+  
+  for (i in 1:level){
+    plot_df[,i+1] <- p_k_v[seq(i, length(p_k_v), by= level)]
+    colnames(plot_df)[i+1] <- paste("P(", i-1, ")", sep = "")
+  }
+  
+  plot_df1 <- melt(plot_df ,  id.vars = 'round', variable.name = "level")
+  p <- ggplot(plot_df1, aes(round, value, color = level)) + geom_line() + labs(x = "Round", y = "P(k)") + guides(color=guide_legend(title=" "))
+  
+  if (blue){ #add color palette
+    p <- p + scale_color_brewer(palette="Blues", direction = -1) + theme_linedraw()
+  }
+  return(p)
+  
+}
+
+
+```
+
+```{r}
+result_df <- add_ID(result_df, add_op = T)
+quick_p_k_plot(result_df, ID = 60, blue = T) 
+ggsave("p_k_3ToM_vs_0ToM.png", width = 20, height = 18, units = "cm", path = "plots")
+ 
+quick_p_k_plot(result_df, ID = 84, blue = T)
+ggsave("p_k_4ToM_vs_2ToM.png", width = 20, height = 18, units = "cm", path = "plots")
+```
+
+#remove and load data - to ease computation
+```{r}
+rm(result_df, result_df_selfsim, result_sum)
+
+#loading 1v1 datasets
+load(file = "result_df_RB_0ToM.rda")
+load(file = "result_df_0ToM_2ToM.rda")
+load(file = "result_df_2ToM_5ToM.rda") 
+```
+
+#p_k again (repeated simulations)
+```{r}
+#repeated sims.
+p_k_rep_sim <- function(d, agent, examined_level = "\\d"){
+  #examined level can be regex - i.e "\\d" gets all levels
+  d <- subset(d, player == agent)
+
+  tmp <- lapply(d$hidden_states, function(x) as_tibble(t(c(x$own_hidden_states$p_k)))) %>% bind_rows()
+  colnames(tmp) <- paste("P(",(seq(length(colnames(tmp)))-1), ")", sep = "")
+  d <- bind_cols(d, tmp)
+  d <- dplyr::select(d, round_nr, sim, colnames(tmp))
+  dp <- reshape2::melt(d, id.vars = c("round_nr", "sim"),value.name = "prop" )
+  dp <- filter(dp, grepl(examined_level, variable)) #remove everything beside the chosen values 
+  
+  dp <- dp %>% group_by(round_nr, variable) %>% mutate(mean_p = mean(prop)) %>% merge(., dp)
+  ggplot(dp, aes(round_nr, prop)) + 
+    stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.25, fill = "steelblue") +
+      stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.30, fill = "steelblue", fun.args = list(conf.int = .5))  + geom_line(aes(round_nr, mean_p), size = 0.3) + labs(x = "Round", y = "P(k)") + theme_light() + facet_wrap(~variable)
+    
+}
+```
+
+#saving plots
+```{r}
+  #fix sim nr
+d <- result_df_0ToM_2ToM
+d$sim <- sort(rep(seq(1,100), 400))
+p_k_rep_sim(d, agent = "2-ToM")
+ggsave("p_k_2ToM_vs_0ToM_multiple_sim.png", width = 20, height = 18, units = "cm", path = "plots")
+
+  #fix sim nr
+d <- result_df_0ToM_2ToM
+d$sim <- sort(rep(seq(1,100), 400))
+p_k_rep_sim(d, agent = "2-ToM")
+ggsave("p_k_2ToM_vs_0ToM_multiple_sim.png", width = 20, height = 18, units = "cm", path = "plots")
+
+  #fix sim nr
+d <- result_df_2ToM_5ToM
+d$sim <- sort(rep(seq(1,100), 400))
+p_k_rep_sim(d, agent = "2-ToM") #from 2-ToM perspective
+ggsave("p_k_2ToM_vs_5ToM_multiple_sim.png", width = 20, height = 18, units = "cm", path = "plots")
+p_k_rep_sim(d, agent = "5-ToM") #from 5-ToM perspective
+ggsave("p_k_5ToM_vs_2ToM_multiple_sim.png", width = 35, height = 18, units = "cm", path = "plots")
+
+
+
+```
+
+
+#Win % plot
+```{r quick_pwon_plot}
+ 
+quick_pwon_plot <- function(d, agent){
+  d <- dplyr::select(d, -c(hidden_states))
+  
+  #create a commulative sum and percentage won
+  d <- d %>% 
+    group_by(sim, player) %>% 
+    mutate(cumsum = cumsum(points), p_won = ((round_nr + cumsum(points))/2)/round_nr)
+  
+  dp <- subset(d, player == agent)
+  
+  dp <- dp %>% group_by(round_nr) %>% summarise(m_p_won = mean(p_won)) %>% merge(., dp)
+  ggplot(dp, aes(round_nr, p_won)) + 
+    stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.25, fill = "steelblue") +
+    stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.30, fill = "steelblue", fun.args = list(conf.int = .5)) +
+    geom_line(aes(round_nr, m_p_won), size = 0.3) + labs(x = "Round", y = "Win %") + theme_linedraw()
+}
+
+```
+
+#saving plots
+```{r}
+#0-ToM vs RB 
+  #fixing sim
+d <- result_df_RB_0ToM
+d$sim <- sort(rep(seq(1,100), 400))
+quick_pwon_plot(d = d , agent = "0-ToM") + labs(title = "0-ToM vs RB -  0 ToM Perspevtive")
+ggsave("0ToMvsRB.png", width = 20, height = 18, units = "cm", path = "plots")
+
+
+
+#2-ToM vs 5 
+  #fixing sim
+d <- result_df_2ToM_5ToM
+d$sim <- sort(rep(seq(1,100), 400))
+quick_pwon_plot(d = d , agent = "5-ToM") + labs(title = "2-ToM vs 5-ToM - 5 ToM perspective")
+ggsave("2ToMvs5ToM.png", width = 20, height = 18, units = "cm", path = "plots")
+
+
+#0-ToM vs 2
+  #fixing sim
+d <- result_df_0ToM_2ToM
+d$sim <- sort(rep(seq(1,100), 400))
+quick_pwon_plot(d = d , agent = "2-ToM") + labs(title = "0-ToM vs 2-ToM - 2 ToM Perspevtive")
+ggsave("0ToMvs2ToM.png", width = 20, height = 18, units = "cm", path = "plots")
+
+```
+
+#0-ToM plot
+```{r}
+d <- result_df_RB_0ToM
+d$sim <- sort(rep(seq(1,100), 400))
+d <- subset(d, player == "0-ToM")
+
+#fixing sim
+
+d$mean_p <- sapply(d$hidden_states, function(x) x$own_hidden_states$mean_basic)
+d$variance <- sapply(d$hidden_states, function(x) x$own_hidden_states$variance_basic)
+d <- dplyr::select(d, -c(hidden_states))
+
+dp <- d %>% 
+  group_by(round_nr) %>% 
+  summarise(m_m = mean(inv.logit(mean_p)), m_v = mean(exp(variance)) ) %>% 
+  merge(., d) %>% 
+  mutate(mean_p = inv.logit(mean_p),  variance = exp(variance))
+
+  #mean
+ggplot(dp, aes(round_nr, mean_p)) + 
+  stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.25, fill = "steelblue") +
+  stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.30, fill = "steelblue", 
+               fun.args = list(conf.int = .5)) + 
+  geom_line(aes(round_nr, m_m)) + 
+  labs(title = "", y = "Mean for probability estimation", x = "Round")
+
+ggsave("0ToM_mean.png", width = 20, height = 18, units = "cm", path = "plots")
+
+dp1 <- subset(dp, sim < 10)
+ggplot(dp1) + geom_line(aes(round_nr, mean_p)) + facet_wrap(~sim)
+
+
+  #variance
+ggplot(dp, aes(round_nr, variance)) + 
+  stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.25, fill = "steelblue") +
+  stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.30, fill = "steelblue", 
+               fun.args = list(conf.int = .5)) + 
+  geom_line(aes(round_nr, m_v)) + 
+  labs(title = "", y = "Variance for probability estimation", x = "Round")
+
+ggsave("0ToM_variance.png", width = 20, height = 18, units = "cm", path = "plots")
+
+
+dp1 <- subset(dp, sim < 10)
+ggplot(dp1) + geom_line(aes(round_nr, variance)) + facet_wrap(~sim)
+
+
+
+#0-ToM plots
+  #Variance
+variance_basic <- c()
+hidden_states <- result_df$hidden_states[result_df$ID == "6"]
+for (i in 1:length(hidden_states)){
+  variance_basic <- c(variance_basic, result_df$hidden_states[result_df$ID == "6"][[i]]$own_hidden_states$variance_basic)
+}
+
+plot(seq(length(hidden_states)), #the trials
+     exp(variance_basic)
+)
+
+  #mean
+result_df <- add_ID(result_df)
+mean_basic <- c()
+for (i in 1:length(hidden_states)){
+  mean_basic <- c(mean_basic, result_df$hidden_states[result_df$ID == "6"][[i]]$own_hidden_states$mean_basic)
+}
+
+plot(seq(length(hidden_states)), #the trials
+     inv.logit(mean_basic)
+)
+
+
+```
+
+```{r}
+rm(result_df_0ToM_2ToM, result_df_2ToM_5ToM, result_df_RB_0ToM)
+```
+
+#lignende for p_k med estimation af modstanderens reelle level
+
+
+# plots vi skal have
+
+  #cumsum plot - DONE
+    #RB vs 0ToM
+    #2 vs 5
+  #heatmap - DONE
+    #all
+    #self sim
+  #level estimation - 
+    #5 vs 2 - conf int
+  #parameter estimation  - DONE
+    #0-ToM vs RB
