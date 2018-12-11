@@ -1,5 +1,7 @@
 
-p_load(RColorBrewer)
+p_load(RColorBrewer, Hmisc)
+
+
 
 #loading large datasets
 load(file = "result_df_full.rda")
@@ -10,7 +12,7 @@ load(file = "result_df_RB_0ToM.rda")
 load(file = "result_df_0ToM_2ToM.rda")
 load(file = "result_df_2ToM_5ToM.rda")
 
-result_df = result_df_2ToM_5ToM
+result_df = result_df
 
 ### CREATING PLOTTING FUNCTIONS ###,l
 
@@ -43,10 +45,10 @@ result_sum <- result_df %>%
   summarise(total_point = sum(points), mean_choice = mean(choice)) %>% 
   arrange(desc(total_point))
 
-result_sum <- result_df %>% 
-  group_by(sim, player, op) %>% 
-  summarise(total_point = sum(points), mean_choice = mean(choice)) %>% 
-  arrange(desc(total_point))
+# result_sum <- result_df %>% 
+#   group_by(sim, player, op) %>% 
+#   summarise(total_point = sum(points), mean_choice = mean(choice)) %>% 
+#   arrange(desc(total_point))
 
 result_sum
 
@@ -106,6 +108,8 @@ quick_heatmap(result_df_sub, return_plot_df = F)
 
 #P-K plot
   #INPUTS
+
+
 quick_p_k_plot <- function(result_df, ID, blue = T){
   
   p_k_v <- c()
@@ -191,11 +195,67 @@ plot(seq(length(hidden_states)), #the trials
 )
 
 
-test_2 <- "images_someartists\\somegenre_somenumber.png"
-strsplit(test_2, "[_\\ ]+")
+###Repeated simulations
+
+quick_pwon_plot <- function(d, agent){
+  d <- dplyr::select(d, -c(hidden_states))
+  
+  #create a commulative sum and percentage won
+  d <- d %>% 
+    group_by(sim, player) %>% 
+    mutate(cumsum = cumsum(points), p_won = ((round_nr + cumsum(points))/2)/round_nr)
+  
+  dp <- subset(d, player == agent)
+  
+  dp <- dp %>% group_by(round_nr) %>% summarise(m_p_won = mean(p_won)) %>% merge(., dp)
+  ggplot(dp, aes(round_nr, p_won)) + 
+    stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.25, fill = "steelblue") +
+    stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.30, fill = "steelblue", fun.args = list(conf.int = .5)) +
+    geom_line(aes(round_nr, m_p_won), size = 0.3) + labs(x = "Round", y = "Win %") + theme_linedraw()
+}
 
 
-#lav kommulativ pr. sim og så plot den kom. pr. sim ifht. round_nr
-#Også gør det for 2ToMvs 0ToM 
+
+#0-ToM vs RB 
+  #fixing sim
+d <- result_df_RB_0ToM
+d$sim <- sort(rep(seq(1,100), 400))
+quick_pwon_plot(d = d , agent = "0-ToM") + labs(title = "0-ToM vs RB -  0 ToM Perspevtive")
+ggsave("0ToMvsRB.png", width = 20, height = 18, units = "cm", path = "plots")
+
+
+
+#2-ToM vs 5 
+  #fixing sim
+d <- result_df_2ToM_5ToM
+d$sim <- sort(rep(seq(1,100), 400))
+quick_pwon_plot(d = d , agent = "5-ToM") + labs(title = "2-ToM vs 5-ToM - 5 ToM perspective")
+ggsave("2ToMvs5ToM.png", width = 20, height = 18, units = "cm", path = "plots")
+
+
+#0-ToM vs 2
+  #fixing sim
+d <- result_df_0ToM_2ToM
+d$sim <- sort(rep(seq(1,100), 400))
+quick_pwon_plot(d = d , agent = "2-ToM") + labs(title = "0-ToM vs 2-ToM - 2 ToM Perspevtive")
+ggsave("0ToMvs2ToM.png", width = 20, height = 18, units = "cm", path = "plots")
+
 
 #lignende for p_k med estimation af modstanderens reelle level
+
+
+# plots vi skal have
+
+  #cumsum plot
+    #RB vs 0ToM
+    #2 vs 5
+  #heatmap
+    #all
+    #self sim
+  #level estimation
+    #5 vs 2 - conf int
+  #parameter estimation
+    #0-ToM vs RB
+  
+
+
