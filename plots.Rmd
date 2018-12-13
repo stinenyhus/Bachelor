@@ -25,7 +25,7 @@ load(file = "result_df_full_selfsim.rda")
 ```
 
 #add ID
-```{r add_ID}
+```{r add_ID} 
 add_ID <- function(result_df, add_op = F){
   #DESCRIPTION
   #INPUT
@@ -68,7 +68,7 @@ result_sum_sub <- subset(result_sum, !(op %in% c("RB", "SoftmaxTitTat", "WSLS"))
 ```
 
 #heatmap
-```{r heatmap}
+```{r heatmap} 
 
   #create a compete matrix
 quick_heatmap <- function(result_df, return_plot_df = F){
@@ -304,7 +304,7 @@ ggplot(dp, aes(round_nr, mean_p)) +
   stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.25, fill = "steelblue") +
   stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.30, fill = "steelblue", 
                fun.args = list(conf.int = .5)) + 
-  geom_line(aes(round_nr, m_m)) + 
+  geom_line(aes(round_nr, m_m)) + theme_light() + 
   labs(title = "", y = "Mean for probability estimation", x = "Round")
 
 ggsave("0ToM_mean.png", width = 20, height = 18, units = "cm", path = "plots")
@@ -318,7 +318,7 @@ ggplot(dp, aes(round_nr, variance)) +
   stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.25, fill = "steelblue") +
   stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.30, fill = "steelblue", 
                fun.args = list(conf.int = .5)) + 
-  geom_line(aes(round_nr, m_v)) + 
+  geom_line(aes(round_nr, m_v)) + theme_light() + 
   labs(title = "", y = "Variance for probability estimation", x = "Round")
 
 ggsave("0ToM_variance.png", width = 20, height = 18, units = "cm", path = "plots")
@@ -355,22 +355,41 @@ plot(seq(length(hidden_states)), #the trials
 
 ```
 
+
+#plotting all the things
 ```{r}
-rm(result_df_0ToM_2ToM, result_df_2ToM_5ToM, result_df_RB_0ToM)
-```
+load(file = "result_df_multiple_1.rda")
+d <- result_df_multiple
+head(d)
+remove(result_df_multiple)
+unique(d$sim)
 
-#lignende for p_k med estimation af modstanderens reelle level
+sump <- d %>% group_by(sim, pair, player) %>% summarise(points = sum(points), total_rounds =  n())
+  #the following command extract the op from the pair by only choosing the agent in the pair which is not the agent (notice that the result are transposed so that the op. is in the same order as players)
+sump$op <- t(str_split(sump$pair, pattern = " / ", simplify = T))[t(str_split(sump$pair, pattern = " / ", simplify = T) != sump$player)]
+
+p_df <- sump %>% group_by(pair, player, op) %>% summarise(mean_score = mean(points), sd_score = sd(points))
+p_df <- p_df %>% filter()
+
+ggplot(p_df, aes(player, op)) + 
+  geom_tile(aes(fill = mean_score), colour = "white") + 
+  scale_fill_gradient(name = "Points", low = "lightsteelblue1", high = "steelblue") + 
+  geom_text(aes(label = paste(round(mean_score, 1)," (", round(sd_score, 1), ")", sep = "")  )) + 
+  theme_classic() + labs(x = "Player 1", y = "Player 2") 
+
+ggplot(p_df, aes(player, op)) + 
+  geom_tile(aes(fill = sd_score), colour = "white") + 
+  scale_fill_gradient(name = "Points", low = "lightsteelblue1", high = "steelblue") + 
+  theme_classic() + labs(x = "Player 1", y = "Player 2") 
+
+unique(d$pair)
+d1 <- filter(d, pair == "0-ToM / 1-ToM")
+quick_pwon_plot(d = d1, agent = "1-ToM")
 
 
-# plots vi skal have
+load("result_df_0ToM_1ToM.rda")
+quick_pwon_plot(d = result_df_0ToM_1ToM, agent = "1-ToM")
+s```
 
-  #cumsum plot - DONE
-    #RB vs 0ToM
-    #2 vs 5
-  #heatmap - DONE
-    #all
-    #self sim
-  #level estimation - 
-    #5 vs 2 - conf int
-  #parameter estimation  - DONE
-    #0-ToM vs RB
+
+

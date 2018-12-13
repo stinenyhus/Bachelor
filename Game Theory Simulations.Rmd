@@ -1214,8 +1214,93 @@ set.seed(2)
 #fetch payoff-matrix
 penny_competitive_matrix = fetch_p_matrix("penny_competitive")
 
+<<<<<<< HEAD
+
+agent_df <- create_agents(c("0-ToM", "1-ToM"), match_up = "RR", prepare_with_defaults = T, progr)
+tmp_df <- compete_all(agent_df, n_rounds = 300, 
+      p_matrix = penny_competitive_matrix)
+
+
+
+
+#Define strategies used
+strategies_unprep <- c("RB", "WSLS", "TFT", "0-ToM", "1-ToM", "2-ToM", "3-ToM", "4-ToM", "5-ToM", "6-ToM", "7-ToM")
+
+#Prepare agents and competition dataframe
+agent_df <- create_agents(strategies_unprep, match_up = "RR", prepare_with_defaults = T)
+agent_df
+
+#Make all agents in the dataframe compete
+result_df <- compete_all(agent_df, n_rounds = 200, 
+        p_matrix = penny_competitive_matrix)
+
+#save
+#save(result_df, file = "result_df_full.rda")
+
+### -- SELF SIMILAR PRIORS -- ###
+
+#Setting seed
+set.seed(2)
+
+#New priors for the k-ToM. they assume opponent is similar to self.
+self_similar_priors <- 
+  list(mean_basic = 0, #agnostic
+                   variance_basic = 0, #will be exponated, so exp(0) = 1
+                   mean = 0, #agnostic
+                   variance = c(0,0), #will be exponated, so exp(0) = 1
+                   param_mean = c(-2 , -1), #not agnostic. These will be exponated efore being used as parameters. So this is a prior of exp(0) = 1
+                   gradient = c(0,0) #is zero. in the Matlab script, one parameter was set to 1 if "flag for noisy" was set
+                   )
+
+#Put agents into a dataframe
+agent_df_unprep_selfsim <- create_agents(strategies_unprep, match_up = "RR", prepare_with_defaults = F)
+
+#Give agents their parameters and priors. Use the self-similar priors for k-ToM.
+agent_df_selfsim <- prepare_df(agent_df_unprep_selfsim, args = rep("k_ToM_priors = self_similar_priors", nrow(agent_df_unprep_selfsim)*2))
+
+#Make all agents in the dataframe compete
+result_df_selfsim <- compete_all(agent_df_selfsim, n_rounds = 200, 
+        p_matrix = penny_competitive_matrix)
+
+#Save the results
+save(result_df_selfsim, file = "result_df_full_selfsim.rda")
+rm(result_df_selfsim)
+
+
+### --- PARAMETER DISTRIBUTIONS --- ###
+
+k_ToM_params_distribution =
+  c(volatility_mean = -2,
+    volatility_sd = 1,
+    temperature_mean = -1,
+    temperature_sd = 1)
+
+#Make the agents with the distributed parameter values
+agent_df_unprep_distribution <- create_agents(strategies_unprep, match_up = "RR", prepare_with_defaults = F)
+
+#Give agents their parameters and priors. Use the self-similar priors for k-ToM.
+agent_df_distribution <- prepare_df(agent_df_unprep_distribution, args = rep("k_ToM = k_ToM_params_distribution", nrow(agent_df_unprep_distribution)*2))
+
+#Make all agents in the dataframe compete
+result_df_distribution <- compete_all(agent_df_distribution, n_rounds = 200, 
+        p_matrix = penny_competitive_matrix)
+
+#Save the results
+save(result_df_distribution, file = "result_df_distribution.rda")
+rm(result_df_distribution)
+
+### -- MANY SIMS -- ###
+set.seed(2)
+
+#number of simulations and rounds
+=======
 #Simulation settings
+<<<<<<< HEAD
 nsims = 20
+=======
+>>>>>>> 82c7e140dd4477e477276aba01a4ef4d52ff71b6
+nsims = 100
+>>>>>>> 09cc79a639cb2058b4c9f95cd9fa0cabd397f6fc
 nrounds = 200
 
 #Define strategies used
@@ -1292,6 +1377,10 @@ save(result_df, file = "result_df.rda")
 # #Save the results
 # save(result_df_selfsim, file = "result_df_full_selfsim.rda")
 # rm(result_df_selfsim)
+
+```
+
+```{r}
 
 ```
 
