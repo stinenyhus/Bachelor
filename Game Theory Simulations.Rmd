@@ -491,7 +491,6 @@ parameter_variance_update <- function(prev_hidden_states, params, p_k) {
   return(variance)
 }  
 
-
 parameter_mean_update <- function(prev_hidden_states, choices, p_k, variance){
   #input
   prev_c_op <- choices[2] #opponent's choice
@@ -572,7 +571,7 @@ gradient_update <- function(opponent_prev_hidden_states, params, mean, param_mea
 ```
 
 Full learning function
-```{r} 
+```{r}  
 rec_learning_function <- function(
   prev_hidden_states,
   params,
@@ -677,26 +676,26 @@ rec_learning_function <- function(
 Decision function - 0-ToM opponent probability
 ```{r}
 #Probability of opponnent a_op choosing 1
-basic_p_op_1_fun <- function(hidden_states){
+basic_p_op_1_fun <- function(hidden_states, params){
 
   #THIS IS THE VARIANT USED IN THE MATLAB CODE, WHICH DOES NOT USE VOLATILITY
-  
+
   #for each sophistication level k:
   mean_basic <- hidden_states$own_hidden_states$mean_basic #mean opponent probability estimate VECTOR
   variance_basic <- hidden_states$own_hidden_states$variance_basic #variance of parameter estimates MATRIX
   a <- 0.36 #this number is taken from the matlab code in ObsRecGen
-  
+
   #Prepare variance
   variance_basic <- exp(variance_basic)
-  
+
   #calculate opponent's probability of choosing 1
-  p_op_1_basic <- inv.logit(mean_basic / sqrt(1 + a * variance_basic)) 
-  
+  p_op_1_basic <- inv.logit(mean_basic / sqrt(1 + a * variance_basic))
+
   return(p_op_1_basic)
 }
 
-###ALTERNATIVE VERSION 
-# basic_p_op_1_fun <- function(own_hidden_states, params){
+# ##ALTERNATIVE VERSION
+# basic_p_op_1_fun <- function(hidden_states, params){
 # 
 #   #THIS IS THE VARIANT BASED ON THE EQUATIONS, BUT NOT USED IN THE MATLAB CODE
 # 
@@ -722,46 +721,47 @@ basic_p_op_1_fun <- function(hidden_states){
 Decision function - opponent probability
 ```{r}
 #Probability of opponnent a_op choosing 1
-p_op_1_k_fun <- function(hidden_states){
+p_op_1_k_fun <- function(hidden_states, params){
 
   #THIS IS THE VARIANT USED IN THE MATLAB CODE, WHICH DOES NOT USE VOLATILITY
-  
+
   #for each sophistication level k:
   mean <- hidden_states$own_hidden_states$mean #mean opponent probability estimate VECTOR
   variance <- hidden_states$own_hidden_states$variance #variance of parameter estimates MATRIX
   gradient <- hidden_states$own_hidden_states$gradient
   a <- 0.36 #this number is taken from the matlab code in ObsRecGen
-  
+
   #Prepare variance
   variance <- rowSums(exp(variance) * gradient^2) #summing the variances of each parameter (after weighting by gradient). One sum per sophistication level
-  
+
   #calculate opponent's probability of choosing 1
-  p_op_1_k <- inv.logit(mean / sqrt(1 + a * variance)) 
-  
+  p_op_1_k <- inv.logit(mean / sqrt(1 + a * variance))
+
   return(p_op_1_k)
 }
 
-###ALTERNATIVE VERSION
-# p_op_1_fun_k <- function(mean, variance, params){
+# ##ALTERNATIVE VERSION
+# p_op_1_k_fun <- function(hidden_states, params){
 # 
 #   #THIS IS THE VARIANT BASED ON THE EQUATIONS, BUT NOT USED IN THE MATLAB CODE
-#   
+# 
 #   #input
 #   volatility <- params$volatility
+#   volatility_dummy <- params$volatility_dummy #dummy parable flags which parameters are affected by volatility
 #   #for each sophistication level k:
-#   mean #mean opponent probability estimate VECTOR
-#   variance #variance of parameter estimates MATRIX
-#   
+#   mean <- hidden_states$own_hidden_states$mean #mean opponent probability estimate VECTOR
+#   variance <- hidden_states$own_hidden_states$variance #variance of parameter estimates MATRIX
+#   gradient <- hidden_states$own_hidden_states$gradient
+# 
 #   #prepare volatility
-#   dummy <- c(1,0,0) #dummy parable flags which parameters are affected by volatility #?# We need to figure out which parameter this is targeting!
-#   volatility <- exp(volatility)*dummy
-#   
+#   volatility <- exp(volatility)*volatility_dummy
+# 
 #   #Prepare variance
 #   variance <- sum(exp(variance)*gradient^2)
-#   
+# 
 #   #calculate opponent's probability of choosing 1
-#   p_op_1_k <- inv.logit(mean/sqrt(1+(variance+volatility)*3/pi^2)) 
-#   
+#   p_op_1_k <- inv.logit(mean/sqrt(1+(variance+volatility)*3/pi^2))
+# 
 #   return(p_op_1_k)
 # }
 
@@ -780,24 +780,18 @@ decision_function <- function(
   if (level == 0) { #If the (simulated) agent is a 0-ToM
     
     #Calculate opponent probability of choosing 1
-    p_op_1 <- basic_p_op_1_fun(hidden_states)
+    p_op_1 <- basic_p_op_1_fun(hidden_states, params)
     
   } else { #If the (simulated) agent is a K-ToM
     
     #Calculate opponent probability of choosing 1, for each k
-    p_op_1_k <- p_op_1_k_fun(hidden_states)
+    p_op_1_k <- p_op_1_k_fun(hidden_states, params)
   
     #extract probabilities for each opponent level
     p_k <- hidden_states$own_hidden_states$p_k
     
     #Weigh probabilities by corresponding level probabilities, to calculate an aggregate probability of opponent choosing 1
     p_op_1 <- sum(p_op_1_k * p_k)
-  }
-  
-  if (is.na(p_op_1)) {
-    print(level)
-    print(hidden_states)
-    stop("There's a NaN!")
   }
   
   #Calculate the expected payoff difference
@@ -889,7 +883,7 @@ rec_prepare_k_ToM <- function(level, priors = "default") {
     priors <- list(mean_basic = 0, #agnostic
                    variance_basic = 0, #will be exponated, so exp(0) = 1
                    mean = 0, #agnostic
-                   variance = c(0,0), #will be exponated, so exp(0) = 1
+                   variance = c(0,0), #will be exponated, so exp(0) = 1 
                    param_mean = c(0,0), #not agnostic. These will be exponated efore being used as parameters. So this is a prior of exp(0) = 1
                    gradient = c(1,0) #is zero. in the Matlab script, one parameter was set to 1 if "flag for noisy" was set. [1] is volatility, [2] is temperature
                    )
@@ -965,9 +959,9 @@ prepare <- function(strategy_string,
                     TFT = c(prob_mean = 0.9,
                             prob_sd = 0.1),
                     k_ToM = c(volatility_mean = -2,
-                              volatility_sd = 0.1,
+                              volatility_sd = 0,
                               temperature_mean = -1,
-                              temperature_sd = 0.1),
+                              temperature_sd = 0),
                     k_ToM_priors = "default"){  
   #INPUT
     #strategy_string: A string of the strategy the agents should apply
@@ -996,7 +990,7 @@ prepare <- function(strategy_string,
     level <- as.numeric(str_extract(strategy_string, "[0-9]")) #save the level
     params <- list(
       volatility = rnorm(1, mean = k_ToM[1], sd = k_ToM[2]),
-      volatility_dummy = c(1,0),
+      volatility_dummy = c(1,0), #
       behavioural_temperature = rnorm(1, mean = exp(k_ToM[3]), sd = k_ToM[4]),
       level = level)
     hidden_states <- rec_prepare_k_ToM(level = level, priors = k_ToM_priors)
@@ -1221,13 +1215,13 @@ set.seed(2)
 penny_competitive_matrix = fetch_p_matrix("penny_competitive")
 
 #Simulation settings
-nsims = 100
+nsims = 20
 nrounds = 200
 
 #Define strategies used
 strategies_unprep <- c("0-ToM", "1-ToM")
 
-result_list = NULL
+result_df = NULL
 for (i in 1:nsims){
   #Prepare agents and competition dataframe
   agent_df <- create_agents(strategies_unprep, match_up = "RR", prepare_with_defaults = T)
@@ -1237,11 +1231,12 @@ for (i in 1:nsims){
 
   #Add column with simulation number
   result_df_single$sim = i
-  result_list[i] <- result_df_single 
+  result_df = rbind(result_df, result_df_single)
 }
-result_df <- result_list %>% bind_rows()
 
 
+result_df
+save(result_df, file = "result_df.rda")
 # #Simulation settings
 # nsims = 20
 # nrounds = 200

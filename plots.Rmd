@@ -233,7 +233,7 @@ ggsave("p_k_5ToM_vs_2ToM_multiple_sim.png", width = 35, height = 18, units = "cm
 
 #Win % plot
 ```{r quick_pwon_plot}
- 
+ quick_pwon_plot(d = result_df, agent = "1-ToM")
 quick_pwon_plot <- function(d, agent){
   d <- dplyr::select(d, -c(hidden_states))
   
