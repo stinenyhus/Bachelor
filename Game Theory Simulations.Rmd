@@ -1220,6 +1220,14 @@ set.seed(2)
 #fetch payoff-matrix
 penny_competitive_matrix = fetch_p_matrix("penny_competitive")
 
+
+agent_df <- create_agents(c("0-ToM", "1-ToM"), match_up = "RR", prepare_with_defaults = T, progr)
+tmp_df <- compete_all(agent_df, n_rounds = 300, 
+      p_matrix = penny_competitive_matrix)
+
+
+
+
 #Define strategies used
 strategies_unprep <- c("RB", "WSLS", "TFT", "0-ToM", "1-ToM", "2-ToM", "3-ToM", "4-ToM", "5-ToM", "6-ToM", "7-ToM")
 
@@ -1448,6 +1456,10 @@ result_df_4ToM_5ToM <- result_df_multiple
 result_df_4ToM_5ToM$sim <- sim_nr
 save(result_df_4ToM_5ToM, file = "result_df_4ToM_5ToM.rda")
 rm(result_df_4ToM_5ToM)
+
+```
+
+```{r}
 
 ```
 
