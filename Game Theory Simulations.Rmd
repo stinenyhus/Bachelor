@@ -959,15 +959,9 @@ prepare <- function(strategy_string,
                     TFT = c(prob_mean = 0.9,
                             prob_sd = 0.1),
                     k_ToM = c(volatility_mean = -2,
-<<<<<<< HEAD
                               volatility_sd = 0,
                               temperature_mean = -1,
                               temperature_sd = 0),
-=======
-                              volatility_sd = 0.0,
-                              temperature_mean = -1,
-                              temperature_sd = 0.0),
->>>>>>> c99844c33803d8fad09fe5e1718856c5d0c877b7
                     k_ToM_priors = "default"){  
   #INPUT
     #strategy_string: A string of the strategy the agents should apply
@@ -996,13 +990,8 @@ prepare <- function(strategy_string,
     level <- as.numeric(str_extract(strategy_string, "[0-9]")) #save the level
     params <- list(
       volatility = rnorm(1, mean = k_ToM[1], sd = k_ToM[2]),
-<<<<<<< HEAD
-      volatility_dummy = c(1,0), #
-      behavioural_temperature = rnorm(1, mean = exp(k_ToM[3]), sd = k_ToM[4]),
-=======
       volatility_dummy = c(1,0),
       behavioural_temperature = rnorm(1, mean = k_ToM[3], sd = k_ToM[4]),
->>>>>>> c99844c33803d8fad09fe5e1718856c5d0c877b7
       level = level)
     hidden_states <- rec_prepare_k_ToM(level = level, priors = k_ToM_priors)
     
@@ -1222,81 +1211,14 @@ compete <- function(player1, player2, p1_params, p2_params, p1_hidden_states = N
 #Setting seed
 set.seed(2)
 
-#fetch payoff-matrix
+nsims = 25
+nrounds = 200
 
 penny_competitive_matrix = fetch_p_matrix("penny_competitive")
 
-agent_df <- create_agents(c("1-ToM", "0-ToM"), match_up = "RR", prepare_with_defaults = T)
-tmp_df <- compete_all(agent_df, n_rounds = 400, 
-      p_matrix = penny_competitive_matrix)
-
-
-
-
 #Define strategies used
-strategies_unprep <- c("RB", "WSLS", "TFT", "0-ToM", "1-ToM", "2-ToM", "3-ToM", "4-ToM", "5-ToM", "6-ToM", "7-ToM")
+strategies_unprep <- c("RB", "WSLS", "0-ToM", "1-ToM", "2-ToM", "3-ToM", "4-ToM", "5-ToM")
 
-#Prepare agents and competition dataframe
-agent_df <- create_agents(strategies_unprep, match_up = "RR", prepare_with_defaults = T)
-agent_df
-
-#Make all agents in the dataframe compete
-result_df <- compete_all(agent_df, n_rounds = 200, 
-        p_matrix = penny_competitive_matrix)
-
-#save
-#save(result_df, file = "result_df_full.rda")
-
-### -- SELF SIMILAR PRIORS -- ###
-
-#Setting seed
-set.seed(2)
-
-#New priors for the k-ToM. they assume opponent is similar to self.
-self_similar_priors <- 
-  list(mean_basic = 0, #agnostic
-                   variance_basic = 0, #will be exponated, so exp(0) = 1
-                   mean = 0, #agnostic
-                   variance = c(0,0), #will be exponated, so exp(0) = 1
-                   param_mean = c(-2 , -1), #not agnostic. These will be exponated efore being used as parameters. So this is a prior of exp(0) = 1
-                   gradient = c(0,0) #is zero. in the Matlab script, one parameter was set to 1 if "flag for noisy" was set
-                   )
-
-#Put agents into a dataframe
-agent_df_unprep_selfsim <- create_agents(strategies_unprep, match_up = "RR", prepare_with_defaults = F)
-
-#Give agents their parameters and priors. Use the self-similar priors for k-ToM.
-agent_df_selfsim <- prepare_df(agent_df_unprep_selfsim, args = rep("k_ToM_priors = self_similar_priors", nrow(agent_df_unprep_selfsim)*2))
-
-#Make all agents in the dataframe compete
-result_df_selfsim <- compete_all(agent_df_selfsim, n_rounds = 200, 
-        p_matrix = penny_competitive_matrix)
-
-#Save the results
-save(result_df_selfsim, file = "result_df_full_selfsim.rda")
-rm(result_df_selfsim)
-
-### -- MANY SIMS -- ###
-set.seed(2)
-
-#number of simulations and rounds
-<<<<<<< HEAD
-=======
-#Simulation settings
-<<<<<<< HEAD
-nsims = 20
-=======
->>>>>>> 82c7e140dd4477e477276aba01a4ef4d52ff71b6
-nsims = 100
->>>>>>> 09cc79a639cb2058b4c9f95cd9fa0cabd397f6fc
-=======
-
-nsims = 10
->>>>>>> c99844c33803d8fad09fe5e1718856c5d0c877b7
-nrounds = 200
-
-#Define strategies used
-strategies_unprep <- c("0-ToM", "1-ToM")
 
 result_df = NULL
 for (i in 1:nsims){
@@ -1308,41 +1230,40 @@ for (i in 1:nsims){
 
   #Add column with simulation number
   result_df_single$sim = i
-<<<<<<< HEAD
-  result_df = rbind(result_df, result_df_single)
-=======
   result_list[[i]] <- result_df_single 
->>>>>>> c99844c33803d8fad09fe5e1718856c5d0c877b7
 }
-
 
 result_df
 save(result_df, file = "result_df.rda")
-# #Simulation settings
-# nsims = 20
-# nrounds = 200
-# 
-# #Define strategies used
-# strategies_unprep <- c("RB", "WSLS", "0-ToM", "1-ToM", "2-ToM", "3-ToM", "4-ToM", "5-ToM")
-# 
-# for (x in 1:5) {
-#   result_df_multiple = NULL
-#   for (i in 1:nsims) {
-#     message(x);message(i)
-#     
-#     #Prepare agents and competition dataframe
-#     agent_df <- create_agents(strategies_unprep, match_up = "RR", prepare_with_defaults = T)
-#     
-#     #Make all agents in the dataframe compete
-#     result_df_single <- compete_all(agent_df, n_rounds = nrounds, p_matrix = penny_competitive_matrix)
-#     
-#     #Add column with simulation number
-#     result_df_single$sim = i
-#     
-#     result_df_multiple = rbind(result_df_multiple, result_df_single)
-#   }
-#  eval(parse( text = paste("save(result_df_multiple, file = 'result_df_multiple_", x, ".rda')", sep = "")))
-# }
+
+
+#Simulation settings
+nsims = 25
+nrounds = 200
+
+#Define strategies used
+strategies_unprep <- c("RB", "WSLS", "0-ToM", "1-ToM", "2-ToM", "3-ToM", "4-ToM", "5-ToM")
+
+for (x in 3:4) {
+  result_list = NULL
+  for (i in 1:nsims) {
+    message(x);message(i)
+
+    #Prepare agents and competition dataframe
+    agent_df <- create_agents(strategies_unprep, match_up = "RR", prepare_with_defaults = T)
+
+    #Make all agents in the dataframe compete
+    result_df_single <- compete_all(agent_df, n_rounds = nrounds, p_matrix = penny_competitive_matrix)
+
+    #Add column with simulation number
+    result_df_single$sim = i
+    
+    result_list[[i]] <- result_df_single 
+  }
+  
+  result_df <- result_list %>% bind_rows()
+  eval(parse( text = paste("save(result_df, file = 'result_df_", x, ".rda')", sep = "")))
+}
 
 
 # ### -- SELF SIMILAR PRIORS -- ###
