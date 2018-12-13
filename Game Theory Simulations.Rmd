@@ -810,7 +810,7 @@ decision_function <- function(
 
 Full k-ToM function
 ```{r}
-k_ToM <- function(params = "default", hidden_states, player, level = NULL, p_matrix, choice_self, choice_op, return_hidden_states = T) {
+k_ToM <- function(params = "default", hidden_states, player, level = NULL, p_matrix, choice_self = NULL, choice_op = NULL, return_hidden_states = T) {
   #DESCRIPTION:
   #INPUT:
   #OUTPUT:
@@ -885,7 +885,7 @@ rec_prepare_k_ToM <- function(level, priors = "default") {
                    mean = 0, #agnostic
                    variance = c(0,0), #will be exponated, so exp(0) = 1 
                    param_mean = c(0,0), #not agnostic. These will be exponated efore being used as parameters. So this is a prior of exp(0) = 1
-                   gradient = c(1,0) #is zero. in the Matlab script, one parameter was set to 1 if "flag for noisy" was set. [1] is volatility, [2] is temperature
+                   gradient = c(0,0) #is zero. in the Matlab script, one parameter was set to 1 if "flag for noisy" was set. [1] is volatility, [2] is temperature
                    )
   }
   
@@ -959,9 +959,15 @@ prepare <- function(strategy_string,
                     TFT = c(prob_mean = 0.9,
                             prob_sd = 0.1),
                     k_ToM = c(volatility_mean = -2,
+<<<<<<< HEAD
                               volatility_sd = 0,
                               temperature_mean = -1,
                               temperature_sd = 0),
+=======
+                              volatility_sd = 0.0,
+                              temperature_mean = -1,
+                              temperature_sd = 0.0),
+>>>>>>> c99844c33803d8fad09fe5e1718856c5d0c877b7
                     k_ToM_priors = "default"){  
   #INPUT
     #strategy_string: A string of the strategy the agents should apply
@@ -990,8 +996,13 @@ prepare <- function(strategy_string,
     level <- as.numeric(str_extract(strategy_string, "[0-9]")) #save the level
     params <- list(
       volatility = rnorm(1, mean = k_ToM[1], sd = k_ToM[2]),
+<<<<<<< HEAD
       volatility_dummy = c(1,0), #
       behavioural_temperature = rnorm(1, mean = exp(k_ToM[3]), sd = k_ToM[4]),
+=======
+      volatility_dummy = c(1,0),
+      behavioural_temperature = rnorm(1, mean = k_ToM[3], sd = k_ToM[4]),
+>>>>>>> c99844c33803d8fad09fe5e1718856c5d0c877b7
       level = level)
     hidden_states <- rec_prepare_k_ToM(level = level, priors = k_ToM_priors)
     
@@ -1212,12 +1223,11 @@ compete <- function(player1, player2, p1_params, p2_params, p1_hidden_states = N
 set.seed(2)
 
 #fetch payoff-matrix
+
 penny_competitive_matrix = fetch_p_matrix("penny_competitive")
 
-<<<<<<< HEAD
-
-agent_df <- create_agents(c("0-ToM", "1-ToM"), match_up = "RR", prepare_with_defaults = T, progr)
-tmp_df <- compete_all(agent_df, n_rounds = 300, 
+agent_df <- create_agents(c("1-ToM", "0-ToM"), match_up = "RR", prepare_with_defaults = T)
+tmp_df <- compete_all(agent_df, n_rounds = 400, 
       p_matrix = penny_competitive_matrix)
 
 
@@ -1266,33 +1276,11 @@ result_df_selfsim <- compete_all(agent_df_selfsim, n_rounds = 200,
 save(result_df_selfsim, file = "result_df_full_selfsim.rda")
 rm(result_df_selfsim)
 
-
-### --- PARAMETER DISTRIBUTIONS --- ###
-
-k_ToM_params_distribution =
-  c(volatility_mean = -2,
-    volatility_sd = 1,
-    temperature_mean = -1,
-    temperature_sd = 1)
-
-#Make the agents with the distributed parameter values
-agent_df_unprep_distribution <- create_agents(strategies_unprep, match_up = "RR", prepare_with_defaults = F)
-
-#Give agents their parameters and priors. Use the self-similar priors for k-ToM.
-agent_df_distribution <- prepare_df(agent_df_unprep_distribution, args = rep("k_ToM = k_ToM_params_distribution", nrow(agent_df_unprep_distribution)*2))
-
-#Make all agents in the dataframe compete
-result_df_distribution <- compete_all(agent_df_distribution, n_rounds = 200, 
-        p_matrix = penny_competitive_matrix)
-
-#Save the results
-save(result_df_distribution, file = "result_df_distribution.rda")
-rm(result_df_distribution)
-
 ### -- MANY SIMS -- ###
 set.seed(2)
 
 #number of simulations and rounds
+<<<<<<< HEAD
 =======
 #Simulation settings
 <<<<<<< HEAD
@@ -1301,6 +1289,10 @@ nsims = 20
 >>>>>>> 82c7e140dd4477e477276aba01a4ef4d52ff71b6
 nsims = 100
 >>>>>>> 09cc79a639cb2058b4c9f95cd9fa0cabd397f6fc
+=======
+
+nsims = 10
+>>>>>>> c99844c33803d8fad09fe5e1718856c5d0c877b7
 nrounds = 200
 
 #Define strategies used
@@ -1316,7 +1308,11 @@ for (i in 1:nsims){
 
   #Add column with simulation number
   result_df_single$sim = i
+<<<<<<< HEAD
   result_df = rbind(result_df, result_df_single)
+=======
+  result_list[[i]] <- result_df_single 
+>>>>>>> c99844c33803d8fad09fe5e1718856c5d0c877b7
 }
 
 

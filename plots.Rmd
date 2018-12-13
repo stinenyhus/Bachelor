@@ -388,8 +388,9 @@ quick_pwon_plot(d = d1, agent = "1-ToM")
 
 
 load("result_df_0ToM_1ToM.rda")
-quick_pwon_plot(d = result_df_0ToM_1ToM, agent = "1-ToM")
-s```
+tmp_df$sim <- 1
+quick_pwon_plot(d = result_df, agent = "1-ToM")
+```
 
 
 
