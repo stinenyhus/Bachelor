@@ -1210,31 +1210,7 @@ compete <- function(player1, player2, p1_params, p2_params, p1_hidden_states = N
 ```{r simulation}
 #Setting seed
 set.seed(2)
-
-nsims = 25
-nrounds = 200
-
 penny_competitive_matrix = fetch_p_matrix("penny_competitive")
-
-#Define strategies used
-strategies_unprep <- c("RB", "WSLS", "0-ToM", "1-ToM", "2-ToM", "3-ToM", "4-ToM", "5-ToM")
-
-
-result_df = NULL
-for (i in 1:nsims){
-  #Prepare agents and competition dataframe
-  agent_df <- create_agents(strategies_unprep, match_up = "RR", prepare_with_defaults = T)
-
-  #Make all agents in the dataframe compete
-  result_df_single <- compete_all(agent_df, n_rounds = nrounds, p_matrix = penny_competitive_matrix)
-
-  #Add column with simulation number
-  result_df_single$sim = i
-  result_list[[i]] <- result_df_single 
-}
-
-result_df
-save(result_df, file = "result_df.rda")
 
 
 #Simulation settings
@@ -1244,7 +1220,7 @@ nrounds = 200
 #Define strategies used
 strategies_unprep <- c("RB", "WSLS", "0-ToM", "1-ToM", "2-ToM", "3-ToM", "4-ToM", "5-ToM")
 
-for (x in 3:4) {
+for (x in c(4)) {
   result_list = NULL
   for (i in 1:nsims) {
     message(x);message(i)
