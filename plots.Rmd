@@ -14,14 +14,7 @@ editor_options:
 knitr::opts_chunk$set(echo = TRUE)
 #devtools::install_github("thomasp85/patchwork")
 pacman::p_load(pacman, plyr, tidyverse, raster, reshape2, knitr, brms, boot, rethinking, groupdata2, patchwork, RColorBrewer, Hmisc)
-```
-
-#load data
-```{r}
-#loading large datasets
-load(file = "result_df_full.rda")
-load(file = "result_df_full_selfsim.rda")
-  #load(file = "result_df_distribution.rda")  #What is this used for peter?
+p_load(gmodels)
 ```
 
 #add ID
@@ -46,25 +39,6 @@ add_ID <- function(result_df, add_op = F){
   
   return(result_df)
 }
-```
-
-#minor calc.
-```{r}
-result_df <- add_ID(result_df, add_op = T)
-result_sum <- result_df %>% 
-  group_by(ID, player, op) %>% 
-  summarise(total_point = sum(points), mean_choice = mean(choice)) %>% 
-  arrange(desc(total_point))
-
-# result_sum <- result_df %>% 
-#   group_by(sim, player, op) %>% 
-#   summarise(total_point = sum(points), mean_choice = mean(choice)) %>% 
-#   arrange(desc(total_point))
-
-
-result_sum
-
-result_sum_sub <- subset(result_sum, !(op %in% c("RB", "SoftmaxTitTat", "WSLS")) & !(player %in% c("RB", "SoftmaxTitTat", "WSLS")) )
 ```
 
 #heatmap
@@ -113,25 +87,6 @@ quick_heatmap <- function(result_df, return_plot_df = F){
 }
 ```
 
-#saving plots
-```{r} 
-quick_heatmap(result_df, return_plot_df = F) 
-ggsave("heatmap_standard.png", width = 20, height = 18, units = "cm", path = "plots") 
-
-quick_heatmap(result_df = result_df_selfsim, return_plot_df = F)
-ggsave("heatmap_selfsim.png", width = 20, height = 18, units = "cm", path = "plots")
-
-result_df <- add_ID(result_df, add_op = T)
-result_df_sub <- subset(result_df, !(op %in% c("TFT", "WSLS", "RB")) & !(player %in% c("TFT", "WSLS", "RB")))
-quick_heatmap(result_df_sub, return_plot_df = F)
-ggsave("heatmap_standard_no_simple.png", width = 20, height = 18, units = "cm", path = "plots")
-
-result_df_selfsim <- add_ID(result_df_selfsim, add_op = T)
-result_df_sub <- subset(result_df_selfsim, !(op %in% c("TFT", "WSLS", "RB")) & !(player %in% c("TFT", "WSLS", "RB")))
-quick_heatmap(result_df_sub, return_plot_df = F)
-ggsave("heatmap_selfsim_no_simple.png", width = 20, height = 18, units = "cm", path = "plots")
-```
-
 #P(k) plot
 ```{r quick_p_k_plot} 
  
@@ -163,28 +118,9 @@ quick_p_k_plot <- function(result_df, ID, blue = T){
 
 ```
 
-```{r}
-result_df <- add_ID(result_df, add_op = T)
-quick_p_k_plot(result_df, ID = 60, blue = T) 
-ggsave("p_k_3ToM_vs_0ToM.png", width = 20, height = 18, units = "cm", path = "plots")
- 
-quick_p_k_plot(result_df, ID = 84, blue = T)
-ggsave("p_k_4ToM_vs_2ToM.png", width = 20, height = 18, units = "cm", path = "plots")
-```
-
-#remove and load data - to ease computation
-```{r}
-rm(result_df, result_df_selfsim, result_sum)
-
-#loading 1v1 datasets
-load(file = "result_df_RB_0ToM.rda")
-load(file = "result_df_0ToM_2ToM.rda")
-load(file = "result_df_2ToM_5ToM.rda") 
-```
-
 #p_k again (repeated simulations)
 ```{r}
-#repeated sims.
+#repeated sims. 
 p_k_rep_sim <- function(d, agent, examined_level = "\\d"){
   #examined level can be regex - i.e "\\d" gets all levels
   d <- subset(d, player == agent)
@@ -200,41 +136,12 @@ p_k_rep_sim <- function(d, agent, examined_level = "\\d"){
   ggplot(dp, aes(round_nr, prop)) + 
     stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.25, fill = "steelblue") +
       stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.30, fill = "steelblue", fun.args = list(conf.int = .5))  + geom_line(aes(round_nr, mean_p), size = 0.3) + labs(x = "Round", y = "P(k)") + theme_light() + facet_wrap(~variable)
-    
 }
 ```
 
-#saving plots
-```{r}
-  #fix sim nr
-d <- result_df_0ToM_2ToM
-d$sim <- sort(rep(seq(1,100), 400))
-p_k_rep_sim(d, agent = "2-ToM")
-ggsave("p_k_2ToM_vs_0ToM_multiple_sim.png", width = 20, height = 18, units = "cm", path = "plots")
-
-  #fix sim nr
-d <- result_df_0ToM_2ToM
-d$sim <- sort(rep(seq(1,100), 400))
-p_k_rep_sim(d, agent = "2-ToM")
-ggsave("p_k_2ToM_vs_0ToM_multiple_sim.png", width = 20, height = 18, units = "cm", path = "plots")
-
-  #fix sim nr
-d <- result_df_2ToM_5ToM
-d$sim <- sort(rep(seq(1,100), 400))
-p_k_rep_sim(d, agent = "2-ToM") #from 2-ToM perspective
-ggsave("p_k_2ToM_vs_5ToM_multiple_sim.png", width = 20, height = 18, units = "cm", path = "plots")
-p_k_rep_sim(d, agent = "5-ToM") #from 5-ToM perspective
-ggsave("p_k_5ToM_vs_2ToM_multiple_sim.png", width = 35, height = 18, units = "cm", path = "plots")
-
-
-
-```
-
-
 #Win % plot
 ```{r quick_pwon_plot}
- quick_pwon_plot(d = result_df, agent = "1-ToM")
-quick_pwon_plot <- function(d, agent){
+quick_pwon_plot <- function(d, agent){ 
   d <- dplyr::select(d, -c(hidden_states))
   
   #create a commulative sum and percentage won
@@ -248,149 +155,186 @@ quick_pwon_plot <- function(d, agent){
   ggplot(dp, aes(round_nr, p_won)) + 
     stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.25, fill = "steelblue") +
     stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.30, fill = "steelblue", fun.args = list(conf.int = .5)) +
-    geom_line(aes(round_nr, m_p_won), size = 0.3) + labs(x = "Round", y = "Win %") + theme_linedraw()
+    geom_line(aes(round_nr, m_p_won), size = 0.3) + labs(x = "Round", y = "Win %") + theme_linedraw() + geom_hline(yintercept = 0.5, color = "firebrick") + coord_cartesian(ylim = c(0.3, 0.8))
 }
-
 ```
 
-#saving plots
-```{r}
-#0-ToM vs RB 
-  #fixing sim
-d <- result_df_RB_0ToM
-d$sim <- sort(rep(seq(1,100), 400))
-quick_pwon_plot(d = d , agent = "0-ToM") + labs(title = "0-ToM vs RB -  0 ToM Perspevtive")
-ggsave("0ToMvsRB.png", width = 20, height = 18, units = "cm", path = "plots")
-
-
-
-#2-ToM vs 5 
-  #fixing sim
-d <- result_df_2ToM_5ToM
-d$sim <- sort(rep(seq(1,100), 400))
-quick_pwon_plot(d = d , agent = "5-ToM") + labs(title = "2-ToM vs 5-ToM - 5 ToM perspective")
-ggsave("2ToMvs5ToM.png", width = 20, height = 18, units = "cm", path = "plots")
-
-
-#0-ToM vs 2
-  #fixing sim
-d <- result_df_0ToM_2ToM
-d$sim <- sort(rep(seq(1,100), 400))
-quick_pwon_plot(d = d , agent = "2-ToM") + labs(title = "0-ToM vs 2-ToM - 2 ToM Perspevtive")
-ggsave("0ToMvs2ToM.png", width = 20, height = 18, units = "cm", path = "plots")
-
-```
 
 #0-ToM plot
 ```{r}
-d <- result_df_RB_0ToM
-d$sim <- sort(rep(seq(1,100), 400))
-d <- subset(d, player == "0-ToM")
+
 
 #fixing sim
-
-d$mean_p <- sapply(d$hidden_states, function(x) x$own_hidden_states$mean_basic)
-d$variance <- sapply(d$hidden_states, function(x) x$own_hidden_states$variance_basic)
-d <- dplyr::select(d, -c(hidden_states))
-
-dp <- d %>% 
-  group_by(round_nr) %>% 
-  summarise(m_m = mean(inv.logit(mean_p)), m_v = mean(exp(variance)) ) %>% 
-  merge(., d) %>% 
-  mutate(mean_p = inv.logit(mean_p),  variance = exp(variance))
-
-  #mean
-ggplot(dp, aes(round_nr, mean_p)) + 
-  stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.25, fill = "steelblue") +
-  stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.30, fill = "steelblue", 
-               fun.args = list(conf.int = .5)) + 
-  geom_line(aes(round_nr, m_m)) + theme_light() + 
-  labs(title = "", y = "Mean for probability estimation", x = "Round")
-
-ggsave("0ToM_mean.png", width = 20, height = 18, units = "cm", path = "plots")
-
-dp1 <- subset(dp, sim < 10)
-ggplot(dp1) + geom_line(aes(round_nr, mean_p)) + facet_wrap(~sim)
-
-
-  #variance
-ggplot(dp, aes(round_nr, variance)) + 
-  stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.25, fill = "steelblue") +
-  stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.30, fill = "steelblue", 
-               fun.args = list(conf.int = .5)) + 
-  geom_line(aes(round_nr, m_v)) + theme_light() + 
-  labs(title = "", y = "Variance for probability estimation", x = "Round")
-
-ggsave("0ToM_variance.png", width = 20, height = 18, units = "cm", path = "plots")
-
-
-dp1 <- subset(dp, sim < 10)
-ggplot(dp1) + geom_line(aes(round_nr, variance)) + facet_wrap(~sim)
-
-
-
-#0-ToM plots
-  #Variance
-variance_basic <- c()
-hidden_states <- result_df$hidden_states[result_df$ID == "6"]
-for (i in 1:length(hidden_states)){
-  variance_basic <- c(variance_basic, result_df$hidden_states[result_df$ID == "6"][[i]]$own_hidden_states$variance_basic)
+oToM_plot <- function(d){
+  
+  d <- subset(d1, player == "0-ToM")
+  d$mean_p <- sapply(d$hidden_states, function(x) x$own_hidden_states$mean_basic)
+  d$variance <- sapply(d$hidden_states, function(x) x$own_hidden_states$variance_basic)
+  
+  dp <- d %>% 
+    group_by(round_nr) %>% 
+    summarise(m_m = mean(inv.logit(mean_p)), m_v = mean(exp(variance)) ) %>% 
+    merge(., d) %>% 
+    mutate(mean_p = inv.logit(mean_p),  variance = exp(variance))
+  
+    #mean
+  p_mean <- ggplot(dp, aes(round_nr, mean_p)) + 
+    stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.25, fill = "steelblue") +
+    stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.30, fill = "steelblue", 
+                 fun.args = list(conf.int = .5)) + 
+    geom_line(aes(round_nr, m_m)) + theme_light() + 
+    labs(title = "", y = "Mean for probability estimation", x = "Round")
+  
+  
+    #variance
+  p_var <- ggplot(dp, aes(round_nr, variance)) + 
+    stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.25, fill = "steelblue") +
+    stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.30, fill = "steelblue", 
+                 fun.args = list(conf.int = .5)) + 
+    geom_line(aes(round_nr, m_v)) + theme_light() + 
+    labs(title = "", y = "Variance for probability estimation", x = "Round")
+  
+  return(list(p_mean, p_var))
 }
-
-plot(seq(length(hidden_states)), #the trials
-     exp(variance_basic)
-)
-
-  #mean
-result_df <- add_ID(result_df)
-mean_basic <- c()
-for (i in 1:length(hidden_states)){
-  mean_basic <- c(mean_basic, result_df$hidden_states[result_df$ID == "6"][[i]]$own_hidden_states$mean_basic)
-}
-
-plot(seq(length(hidden_states)), #the trials
-     inv.logit(mean_basic)
-)
-
-
 ```
 
 
 #plotting all the things
 ```{r}
-load(file = "result_df_multiple_1.rda")
-d <- result_df_multiple
-head(d)
-remove(result_df_multiple)
+load(file = "result_df_1.rda")
+d <- result_df
+load(file = "result_df_2.rda")
+result_df$sim <- result_df$sim + 25
+d <- rbind(d, result_df)
+load(file = "result_df_3.rda")
+result_df$sim <- result_df$sim + 50
+d <- rbind(d, result_df)
+load(file = "result_df_4.rda")
+result_df$sim <- result_df$sim + 75
+d <- rbind(d, result_df)
+rm(result_df)
 unique(d$sim)
+
 
 sump <- d %>% group_by(sim, pair, player) %>% summarise(points = sum(points), total_rounds =  n())
   #the following command extract the op from the pair by only choosing the agent in the pair which is not the agent (notice that the result are transposed so that the op. is in the same order as players)
 sump$op <- t(str_split(sump$pair, pattern = " / ", simplify = T))[t(str_split(sump$pair, pattern = " / ", simplify = T) != sump$player)]
 
-p_df <- sump %>% group_by(pair, player, op) %>% summarise(mean_score = mean(points), sd_score = sd(points))
-p_df <- p_df %>% filter()
+p_df <- sump %>% mutate(p_won = ((total_rounds + points)/2)/total_rounds) %>% group_by(pair, player, op) %>% summarise(mean_pwon = mean(p_won), sd_p_won = sd(p_won), ci_lower = ci(p_won)[2], ci_upper = ci(p_won)[3])
 
-ggplot(p_df, aes(player, op)) + 
-  geom_tile(aes(fill = mean_score), colour = "white") + 
-  scale_fill_gradient(name = "Points", low = "lightsteelblue1", high = "steelblue") + 
-  geom_text(aes(label = paste(round(mean_score, 1)," (", round(sd_score, 1), ")", sep = "")  )) + 
-  theme_classic() + labs(x = "Player 1", y = "Player 2") 
+#all
+heat1_all <- ggplot(p_df, aes(player, op)) + 
+  geom_tile(aes(fill = mean_pwon), colour = "white") + 
+  scale_fill_gradient(name = "Win %", low = "lightsteelblue1", high = "steelblue") + 
+  geom_text(aes(label = paste(round(mean_pwon, 2)," (", round(ci_lower, 2), ", ", round(ci_upper, 2), ")", sep = "")  )) + 
+  theme_classic() + labs(x = "Player 1", y = "Player 2")
 
-ggplot(p_df, aes(player, op)) + 
-  geom_tile(aes(fill = sd_score), colour = "white") + 
-  scale_fill_gradient(name = "Points", low = "lightsteelblue1", high = "steelblue") + 
-  theme_classic() + labs(x = "Player 1", y = "Player 2") 
+p_df <- p_df %>% filter(!(player %in% c("WSLS", "RB")) & !(op %in% c("WSLS", "RB")))
+
+#ToM's
+heat2_all <- ggplot(p_df, aes(player, op)) + 
+  geom_tile(aes(fill = mean_pwon), colour = "white") + 
+  scale_fill_gradient(name = "Win %", low = "lightsteelblue1", high = "steelblue") + 
+  geom_text(aes(label = paste(round(mean_pwon, 2)," (", round(ci_lower, 2), ", ", round(ci_upper, 2), ")", sep = "")  )) + 
+  theme_classic() + labs(x = "Player 1", y = "Player 2")
+
+  #doing it with only 30 trials
+sump <- d %>% filter(round_nr < 31) %>% group_by(sim, pair, player) %>% summarise(points = sum(points), total_rounds =  n())
+sump$op <- t(str_split(sump$pair, pattern = " / ", simplify = T))[t(str_split(sump$pair, pattern = " / ", simplify = T) != sump$player)]
+
+p_df <- sump %>% mutate(p_won = ((total_rounds + points)/2)/total_rounds) %>% group_by(pair, player, op) %>% summarise(mean_pwon = mean(p_won), sd_p_won = sd(p_won), ci_lower = ci(p_won)[2], ci_upper = ci(p_won)[3])
+
+#with only 30 trials
+heat1_30 <- ggplot(p_df, aes(player, op)) + 
+  geom_tile(aes(fill = mean_pwon), colour = "white") + 
+  scale_fill_gradient(name = "Win %", low = "lightsteelblue1", high = "steelblue") + 
+  geom_text(aes(label = paste(round(mean_pwon, 2)," (", round(ci_lower, 2), ", ", round(ci_upper, 2), ")", sep = "")  )) + 
+  theme_classic() + labs(x = "Player 1", y = "Player 2")
+
+p_df <- p_df %>% filter(!(player %in% c("WSLS", "RB")) & !(op %in% c("WSLS", "RB")))
+
+#with only 30 trials - ToMs
+heat2_30 <- ggplot(p_df, aes(player, op)) + 
+  geom_tile(aes(fill = mean_pwon), colour = "white") + 
+  scale_fill_gradient(name = "Win %", low = "lightsteelblue1", high = "steelblue") + 
+  geom_text(aes(label = paste(round(mean_pwon, 2)," (", round(ci_lower, 2), ", ", round(ci_upper, 2), ")", sep = "")  )) + 
+  theme_classic() + labs(x = "Player 1", y = "Player 2")
 
 unique(d$pair)
 d1 <- filter(d, pair == "0-ToM / 1-ToM")
-quick_pwon_plot(d = d1, agent = "1-ToM")
+pwon1v0 <- quick_pwon_plot(d = d1, agent = "1-ToM")
+d1 <- filter(d, pair == "1-ToM / 2-ToM")
+pwon2v1 <- quick_pwon_plot(d = d1, agent = "2-ToM")
+d1 <- filter(d, pair == "2-ToM / 4-ToM")
+pwon4v2 <- quick_pwon_plot(d = d1, agent = "4-ToM")
+d1 <- filter(d, pair == "4-ToM / 5-ToM")
+pwon5v4 <- quick_pwon_plot(d = d1, agent = "5-ToM")
+
+d1 <- filter(d, pair == "RB / 0-ToM")
+plots <- oToM_plot(d = d1)
+otom_mean <- plots[[1]]
+otom_var <- plots[[2]]
+
+d1 <- filter(d, pair == "1-ToM / 2-ToM")
+p_k2v1 <- p_k_rep_sim(d = d1, agent = "2-ToM")
+
+d1 <- filter(d, pair == "2-ToM / 5-ToM")
+p_k5v2 <- p_k_rep_sim(d = d1, agent = "5-ToM")
+
+d1 <- filter(d, pair == "2-ToM / 3-ToM")
+p_k3v2 <- p_k_rep_sim(d = d1, agent = "3-ToM")
+
+#all all the plots 
+plot_list <- c("heat1_all", "heat2_all","heat1_30", "heat2_30", "pwon1v0", "pwon2v1", "pwon4v2", "pwon5v4", "otom_mean", "otom_var", "p_k2v1", "p_k5v2", "p_k3v2")
+plot_list <- c("heat1_all", "heat2_all","heat1_30", "heat2_30")
+
+for (i in plot_list){
+  assign("tmpplot", eval(parse(text = i)))
+  filename <- paste(i, ".png", sep = "")
+  if (i == "p_k5v2"){
+    ggsave(filename = filename, plot = tmpplot, path = "plots", width = 30, height = 20, units = "cm")
+  } else if (grepl("heat",i)){
+    ggsave(filename = filename, plot = tmpplot, path = "plots", width = 30, height = 30, units = "cm")
+  } else {
+    ggsave(filename = filename, plot = tmpplot, path = "plots", width = 20, height = 20, units = "cm")
+  }
+}
 
 
-load("result_df_0ToM_1ToM.rda")
-tmp_df$sim <- 1
-quick_pwon_plot(d = result_df, agent = "1-ToM")
+```
+
+#extracting parameters
+```{r}
+
+d1 <- d %>% filter(pair == "0-ToM / 1-ToM", player = "1-ToM")
+
+tmp <- lapply(d1$hidden_states, function(x) as_tibble(t(c( x$own_hidden_states$param_mean)))) %>% bind_rows()
+colnames(tmp) <- paste("mean_", seq(2), sep = "")
+d1 <- bind_cols(d1, tmp)
+d1 <- d1 %>% group_by(round_nr) %>% summarise(mean_1_m = mean(mean_1), mean_2_m = mean(mean_2)) %>% merge(.,d1)
+
+ggplot(d1, aes(round_nr, mean_1))  +
+  stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.25, fill = "steelblue") +
+  stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.30, fill = "steelblue", fun.args = list(conf.int = .5)) +
+  geom_line(aes(round_nr, mean_1_m), size = 0.3)
+
+ggplot(d1, aes(round_nr, mean_2))  +
+  stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.25, fill = "steelblue") +
+  stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.30, fill = "steelblue", fun.args = list(conf.int = .5)) +
+  geom_line(aes(round_nr, mean_2_m), size = 0.3)
 ```
 
 
+```{r}
+tmpplot <- quick_pwon_plot(result_df, agent = "0-ToM")
+ggsave(filename = "RBvotom_lowB.png", plot = tmpplot, path = "plots", width = 20, height = 20, units = "cm")
+d_save <- d
+
+beepr::beep(5)
+```
+
+
+# tjek SD på heatmap
+#lav heatmap om til percentage won
+#omregn på prop på 0 tom'en
 

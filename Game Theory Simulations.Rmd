@@ -675,7 +675,11 @@ rec_learning_function <- function(
 
 Decision function - 0-ToM opponent probability
 ```{r}
+<<<<<<< HEAD
 Probability of opponnent a_op choosing 1
+=======
+#Probability of opponnent a_op choosing 1
+>>>>>>> b5a2ff3b7063f2c6b826bb8784c8b641dbcb50e2
 basic_p_op_1_fun <- function(hidden_states, params){
 
   #THIS IS THE VARIANT USED IN THE MATLAB CODE, WHICH DOES NOT USE VOLATILITY
@@ -874,7 +878,7 @@ k_ToM <- function(params = "default", hidden_states, player, level = NULL, p_mat
 
 Preparing hidden states for the k-ToM function
 ```{r}
-rec_prepare_k_ToM <- function(level, priors = "default") {
+rec_prepare_k_ToM <- function(level, priors = "default") { 
   
   if (class(priors) != "list"){ #Use default priors if nothing else is specified
     
@@ -960,7 +964,7 @@ prepare <- function(strategy_string,
                             prob_sd = 0.1),
                     k_ToM = c(volatility_mean = -2,
                               volatility_sd = 0,
-                              temperature_mean = -1,
+                              temperature_mean = -10,
                               temperature_sd = 0),
                     k_ToM_priors = "default"){  
   #INPUT
@@ -1211,6 +1215,7 @@ compete <- function(player1, player2, p1_params, p2_params, p1_hidden_states = N
 #Setting seed
 set.seed(2)
 
+
 #Get penny matrix
 penny_competitive_matrix = fetch_p_matrix("penny_competitive")
 
@@ -1219,6 +1224,7 @@ nsims = 20
 nrounds = 200
 
 #Define strategies used
+<<<<<<< HEAD
 strategies_unprep <- c("RB", "WSLS", "0-ToM", "1-ToM", "2-ToM", "3-ToM", "4-ToM", "5-ToM")
 
 # for (x in 1:1) {
@@ -1264,20 +1270,72 @@ for (x in 1:2) {
 
     #Give agents their parameters and priors. Use the self-similar priors for k-ToM.
     agent_df <- prepare_df(agent_df_unprep, args = rep("k_ToM_priors = self_similar_priors", nrow(agent_df_unprep)*2))
+=======
+strategies_unprep <- c("RB", "0-ToM")
 
-    #Make all agents in the dataframe compete
-    result_df_single <- compete_all(agent_df, n_rounds = nrounds, p_matrix = penny_competitive_matrix)
+result_list = NULL
+for (i in 1:nsims) {
+>>>>>>> b5a2ff3b7063f2c6b826bb8784c8b641dbcb50e2
 
-    #Add column with simulation number
-    result_df_single$sim = i
+  #Prepare agents and competition dataframe
+  agent_df <- create_agents(strategies_unprep, match_up = "RR", prepare_with_defaults = T)
 
-    result_list[[i]] <- result_df_single
-  }
+  #Make all agents in the dataframe compete
+  result_df_single <- compete_all(agent_df, n_rounds = nrounds, p_matrix = penny_competitive_matrix)
 
+  #Add column with simulation number
+  result_df_single$sim = i
+
+<<<<<<< HEAD
   result_df <- result_list %>% bind_rows()
   eval(parse( text = paste("save(result_df, file = 'result_df_selfsim_", x, ".rda')", sep = "")))
 }
 
+=======
+  result_list[[i]] <- result_df_single
+}
+
+result_df <- result_list %>% bind_rows()
+eval(parse( text = paste("save(result_df_noa_, file = 'result_df_", x, ".rda')", sep = "")))
+
+
+# 
+# ####Self-similar priors ####
+# self_similar_priors <-
+#   list(mean_basic = 0, #agnostic
+#                    variance_basic = 0, #will be exponated, so exp(0) = 1
+#                    mean = 0, #agnostic
+#                    variance = c(0,0), #will be exponated, so exp(0) = 1
+#                    param_mean = c(-2 , -1), #not agnostic. These will be exponated efore being used as parameters. So this is a prior of exp(0) = 1
+#                    gradient = c(0,0) #is zero. in the Matlab script, one parameter was set to 1 if "flag for noisy" was set
+#                    )
+# 
+# #Put agents into a dataframe
+# agent_df_unprep <- create_agents(strategies_unprep, match_up = "RR", prepare_with_defaults = F)
+# 
+# for (x in 3:4) {
+#   rm(result_df)
+#   result_list = NULL
+#   for (i in 1:nsims) {
+#     message(x);message(i)
+#     
+#     #Give agents their parameters and priors. Use the self-similar priors for k-ToM.
+#     agent_df <- prepare_df(agent_df_unprep, args = rep("k_ToM_priors = self_similar_priors", nrow(agent_df_unprep)*2))
+# 
+#     #Make all agents in the dataframe compete
+#     result_df_single <- compete_all(agent_df, n_rounds = nrounds, p_matrix = penny_competitive_matrix)
+# 
+#     #Add column with simulation number
+#     result_df_single$sim = i
+#     
+#     result_list[[i]] <- result_df_single 
+#   }
+#   
+#   result_df <- result_list %>% bind_rows()
+#   eval(parse( text = paste("save(result_df, file = 'result_df_selfsim_", x, ".rda')", sep = "")))
+# }
+
+>>>>>>> b5a2ff3b7063f2c6b826bb8784c8b641dbcb50e2
 
 ```
 
