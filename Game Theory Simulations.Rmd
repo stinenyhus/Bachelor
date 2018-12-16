@@ -676,94 +676,94 @@ rec_learning_function <- function(
 Decision function - 0-ToM opponent probability
 ```{r}
 #Probability of opponnent a_op choosing 1
-# basic_p_op_1_fun <- function(hidden_states, params){
-# 
-#   #THIS IS THE VARIANT USED IN THE MATLAB CODE, WHICH DOES NOT USE VOLATILITY
-# 
-#   #for each sophistication level k:
-#   mean_basic <- hidden_states$own_hidden_states$mean_basic #mean opponent probability estimate VECTOR
-#   variance_basic <- hidden_states$own_hidden_states$variance_basic #variance of parameter estimates MATRIX
-#   a <- 0.36 #this number is taken from the matlab code in ObsRecGen
-# 
-#   #Prepare variance
-#   variance_basic <- exp(variance_basic)
-# 
-#   #calculate opponent's probability of choosing 1
-#   p_op_1_basic <- inv.logit(mean_basic / sqrt(1 + a * variance_basic))
-# 
-#   return(p_op_1_basic)
-# }
-
-##ALTERNATIVE VERSION
 basic_p_op_1_fun <- function(hidden_states, params){
 
-  #THIS IS THE VARIANT BASED ON THE EQUATIONS, BUT NOT USED IN THE MATLAB CODE
+  #THIS IS THE VARIANT USED IN THE MATLAB CODE, WHICH DOES NOT USE VOLATILITY
 
-  #input
-  volatility <- params$volatility
-  mean_basic <-  hidden_states$own_hidden_states$mean_basic #mean opponent probability estimate VECTOR
-  variance_basic <-  hidden_states$own_hidden_states$variance_basic #variance of parameter estimates MATRIX
+  #for each sophistication level k:
+  mean_basic <- hidden_states$own_hidden_states$mean_basic #mean opponent probability estimate VECTOR
+  variance_basic <- hidden_states$own_hidden_states$variance_basic #variance of parameter estimates MATRIX
+  a <- 0.36 #this number is taken from the matlab code in ObsRecGen
 
   #Prepare variance
   variance_basic <- exp(variance_basic)
 
-  #prepare volatility
-  volatility <- exp(volatility)
-
   #calculate opponent's probability of choosing 1
-  p_op_1_basic <- inv.logit(mean_basic/sqrt(1+(variance_basic+volatility)*3/pi^2))
+  p_op_1_basic <- inv.logit(mean_basic / sqrt(1 + a * variance_basic))
 
   return(p_op_1_basic)
 }
+
+# ##ALTERNATIVE VERSION
+# basic_p_op_1_fun <- function(hidden_states, params){
+# 
+#   #THIS IS THE VARIANT BASED ON THE EQUATIONS, BUT NOT USED IN THE MATLAB CODE
+# 
+#   #input
+#   volatility <- params$volatility
+#   mean_basic <-  hidden_states$own_hidden_states$mean_basic #mean opponent probability estimate VECTOR
+#   variance_basic <-  hidden_states$own_hidden_states$variance_basic #variance of parameter estimates MATRIX
+# 
+#   #Prepare variance
+#   variance_basic <- exp(variance_basic)
+# 
+#   #prepare volatility
+#   volatility <- exp(volatility)
+# 
+#   #calculate opponent's probability of choosing 1
+#   p_op_1_basic <- inv.logit(mean_basic/sqrt(1+(variance_basic+volatility)*3/pi^2))
+# 
+#   return(p_op_1_basic)
+# }
 
 ```
 
 Decision function - opponent probability
 ```{r}
-# #Probability of opponnent a_op choosing 1
-# p_op_1_k_fun <- function(hidden_states, params){
-# 
-#   #THIS IS THE VARIANT USED IN THE MATLAB CODE, WHICH DOES NOT USE VOLATILITY
-# 
-#   #for each sophistication level k:
-#   mean <- hidden_states$own_hidden_states$mean #mean opponent probability estimate VECTOR
-#   variance <- hidden_states$own_hidden_states$variance #variance of parameter estimates MATRIX
-#   gradient <- hidden_states$own_hidden_states$gradient
-#   a <- 0.36 #this number is taken from the matlab code in ObsRecGen
-# 
-#   #Prepare variance
-#   variance <- rowSums(exp(variance) * gradient^2) #summing the variances of each parameter (after weighting by gradient). One sum per sophistication level
-# 
-#   #calculate opponent's probability of choosing 1
-#   p_op_1_k <- inv.logit(mean / sqrt(1 + a * variance))
-# 
-#   return(p_op_1_k)
-# }
-
-##ALTERNATIVE VERSION
+#Probability of opponnent a_op choosing 1
 p_op_1_k_fun <- function(hidden_states, params){
 
-  #THIS IS THE VARIANT BASED ON THE EQUATIONS, BUT NOT USED IN THE MATLAB CODE
+  #THIS IS THE VARIANT USED IN THE MATLAB CODE, WHICH DOES NOT USE VOLATILITY
 
-  #input
-  volatility <- params$volatility
-  volatility_dummy <- params$volatility_dummy #dummy parable flags which parameters are affected by volatility
   #for each sophistication level k:
   mean <- hidden_states$own_hidden_states$mean #mean opponent probability estimate VECTOR
   variance <- hidden_states$own_hidden_states$variance #variance of parameter estimates MATRIX
   gradient <- hidden_states$own_hidden_states$gradient
-
-  #prepare volatility
-  volatility <- exp(volatility)*volatility_dummy
+  a <- 0.36 #this number is taken from the matlab code in ObsRecGen
 
   #Prepare variance
-  variance <- sum(exp(variance)*gradient^2)
+  variance <- rowSums(exp(variance) * gradient^2) #summing the variances of each parameter (after weighting by gradient). One sum per sophistication level
 
   #calculate opponent's probability of choosing 1
-  p_op_1_k <- inv.logit(mean/sqrt(1+(variance+volatility)*3/pi^2))
+  p_op_1_k <- inv.logit(mean / sqrt(1 + a * variance))
 
   return(p_op_1_k)
 }
+
+# ##ALTERNATIVE VERSION
+# p_op_1_k_fun <- function(hidden_states, params){
+# 
+#   #THIS IS THE VARIANT BASED ON THE EQUATIONS, BUT NOT USED IN THE MATLAB CODE
+# 
+#   #input
+#   volatility <- params$volatility
+#   volatility_dummy <- params$volatility_dummy #dummy parable flags which parameters are affected by volatility
+#   #for each sophistication level k:
+#   mean <- hidden_states$own_hidden_states$mean #mean opponent probability estimate VECTOR
+#   variance <- hidden_states$own_hidden_states$variance #variance of parameter estimates MATRIX
+#   gradient <- hidden_states$own_hidden_states$gradient
+# 
+#   #prepare volatility
+#   volatility <- exp(volatility)*volatility_dummy
+# 
+#   #Prepare variance
+#   variance <- sum(exp(variance)*gradient^2)
+# 
+#   #calculate opponent's probability of choosing 1
+#   p_op_1_k <- inv.logit(mean/sqrt(1+(variance+volatility)*3/pi^2))
+# 
+#   return(p_op_1_k)
+# }
 
 ```
 
@@ -874,7 +874,7 @@ k_ToM <- function(params = "default", hidden_states, player, level = NULL, p_mat
 
 Preparing hidden states for the k-ToM function
 ```{r}
-rec_prepare_k_ToM <- function(level, priors = "default") {
+rec_prepare_k_ToM <- function(level, priors = "default") { 
   
   if (class(priors) != "list"){ #Use default priors if nothing else is specified
     
@@ -960,7 +960,7 @@ prepare <- function(strategy_string,
                             prob_sd = 0.1),
                     k_ToM = c(volatility_mean = -2,
                               volatility_sd = 0,
-                              temperature_mean = -1,
+                              temperature_mean = -10,
                               temperature_sd = 0),
                     k_ToM_priors = "default"){  
   #INPUT
@@ -1220,29 +1220,26 @@ nsims = 10
 nrounds = 200
 
 #Define strategies used
-strategies_unprep <- c("RB", "WSLS", "0-ToM", "1-ToM", "2-ToM", "3-ToM", "4-ToM", "5-ToM")
+strategies_unprep <- c("RB", "0-ToM")
 
-for (x in 2:2) {
+result_list = NULL
+for (i in 1:nsims) {
 
-  result_list = NULL
-  for (i in 1:nsims) {
-    message(x);message(i)
+  #Prepare agents and competition dataframe
+  agent_df <- create_agents(strategies_unprep, match_up = "RR", prepare_with_defaults = T)
 
-    #Prepare agents and competition dataframe
-    agent_df <- create_agents(strategies_unprep, match_up = "RR", prepare_with_defaults = T)
+  #Make all agents in the dataframe compete
+  result_df_single <- compete_all(agent_df, n_rounds = nrounds, p_matrix = penny_competitive_matrix)
 
-    #Make all agents in the dataframe compete
-    result_df_single <- compete_all(agent_df, n_rounds = nrounds, p_matrix = penny_competitive_matrix)
+  #Add column with simulation number
+  result_df_single$sim = i
 
-    #Add column with simulation number
-    result_df_single$sim = i
-
-    result_list[[i]] <- result_df_single
-  }
-
-  result_df <- result_list %>% bind_rows()
-  eval(parse( text = paste("save(result_df_noa_, file = 'result_df_", x, ".rda')", sep = "")))
+  result_list[[i]] <- result_df_single
 }
+
+result_df <- result_list %>% bind_rows()
+eval(parse( text = paste("save(result_df_noa_, file = 'result_df_", x, ".rda')", sep = "")))
+
 
 # 
 # ####Self-similar priors ####
