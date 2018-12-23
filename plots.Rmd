@@ -242,7 +242,8 @@ heat2_all <- ggplot(p_df, aes(player, op)) +
 sump <- d %>% filter(round_nr < 31) %>% group_by(sim, pair, player) %>% summarise(points = sum(points), total_rounds =  n())
 sump$op <- t(str_split(sump$pair, pattern = " / ", simplify = T))[t(str_split(sump$pair, pattern = " / ", simplify = T) != sump$player)]
 
-p_df <- sump %>% mutate(p_won = ((total_rounds + points)/2)/total_rounds) %>% group_by(pair, player, op) %>% summarise(mean_pwon = mean(p_won), sd_p_won = sd(p_won), ci_lower = ci(p_won)[2], ci_upper = ci(p_won)[3])
+head(d)
+p_df <- sump %>% mutate(p_won = ((total_rounds + points)/2)/total_rounds) %>% group_by(pair, player, op) %>% summarise(mean_pwon = mean(p_won), sd_p_won = sd(p_won), ci_lower = ci(p_won)[2], ci_upper = ci(p_won)[3], n = n())
 
 #with only 30 trials
 heat1_30 <- ggplot(p_df, aes(player, op)) + 
@@ -275,6 +276,11 @@ plots <- oToM_plot(d = d1)
 otom_mean <- plots[[1]]
 otom_var <- plots[[2]]
 
+d1 <- filter(d, pair == "0-ToM / 1-ToM")
+plots <- oToM_plot(d = d1)
+otom_mean_v1 <- plots[[1]]
+otom_var_v1 <- plots[[2]]
+
 d1 <- filter(d, pair == "1-ToM / 2-ToM")
 p_k2v1 <- p_k_rep_sim(d = d1, agent = "2-ToM")
 
@@ -284,9 +290,17 @@ p_k5v2 <- p_k_rep_sim(d = d1, agent = "5-ToM")
 d1 <- filter(d, pair == "2-ToM / 3-ToM")
 p_k3v2 <- p_k_rep_sim(d = d1, agent = "3-ToM")
 
+d1 <- filter(d, pair == "0-ToM / 2-ToM")
+p_k2v0 <- p_k_rep_sim(d = d1, agent = "2-ToM")
+
+d1 <- filter(d, pair == "0-ToM / 3-ToM")
+p_k3v0 <- p_k_rep_sim(d = d1, agent = "3-ToM")
+
 #all all the plots 
 plot_list <- c("heat1_all", "heat2_all","heat1_30", "heat2_30", "pwon1v0", "pwon2v1", "pwon4v2", "pwon5v4", "otom_mean", "otom_var", "p_k2v1", "p_k5v2", "p_k3v2")
-plot_list <- c("heat1_all", "heat2_all","heat1_30", "heat2_30")
+plot_list <- c("heat1_all", "heat2_30")
+plot_list <- c("p_k2v0", "p_k3v0")
+i = "heat1_all"
 
 for (i in plot_list){
   assign("tmpplot", eval(parse(text = i)))
@@ -304,24 +318,49 @@ for (i in plot_list){
 ```
 
 #extracting parameters
-```{r}
+```{r} 
 
-d1 <- d %>% filter(pair == "0-ToM / 1-ToM", player = "1-ToM")
+d1 <- d %>% filter(pair == "4-ToM / 5-ToM", player == "4-ToM")
 
 tmp <- lapply(d1$hidden_states, function(x) as_tibble(t(c( x$own_hidden_states$param_mean)))) %>% bind_rows()
 colnames(tmp) <- paste("mean_", seq(2), sep = "")
 d1 <- bind_cols(d1, tmp)
 d1 <- d1 %>% group_by(round_nr) %>% summarise(mean_1_m = mean(mean_1), mean_2_m = mean(mean_2)) %>% merge(.,d1)
 
-ggplot(d1, aes(round_nr, mean_1))  +
+mu_1_2v1 <- ggplot(d1, aes(round_nr, mean_1))  +
   stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.25, fill = "steelblue") +
   stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.30, fill = "steelblue", fun.args = list(conf.int = .5)) +
-  geom_line(aes(round_nr, mean_1_m), size = 0.3)
+  geom_line(aes(round_nr, mean_1_m), size = 0.3) + theme_light() + labs(x= "Trial", y = "Volatility estimate")
 
-ggplot(d1, aes(round_nr, mean_2))  +
+mu_2_2v1 <- ggplot(d1, aes(round_nr, mean_2))  +
   stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.25, fill = "steelblue") +
   stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.30, fill = "steelblue", fun.args = list(conf.int = .5)) +
-  geom_line(aes(round_nr, mean_2_m), size = 0.3)
+  geom_line(aes(round_nr, mean_2_m), size = 0.3)+ theme_light() + labs(x= "Trial", y = "Tempature estimate")
+
+ggsave(filename = "mu_1_2v1.png", plot = mu_1_2v1, path = "plots", width = 20, height = 20, units = "cm")
+ggsave(filename = "mu_2_2v1.png", plot = mu_2_2v1, path = "plots", width = 20, height = 20, units = "cm")
+
+
+d1 <- d %>% filter(pair == "0-ToM / 1-ToM", player == "1-ToM")
+
+tmp <- lapply(d1$hidden_states, function(x) as_tibble(t(c( x$own_hidden_states$param_mean)))) %>% bind_rows()
+colnames(tmp) <- paste("mean_", seq(2), sep = "")
+d1 <- bind_cols(d1, tmp)
+d1 <- d1 %>% group_by(round_nr) %>% summarise(mean_1_m = mean(mean_1), mean_2_m = mean(mean_2)) %>% merge(.,d1)
+
+mu_1_1v0 <- ggplot(d1, aes(round_nr, mean_1))  +
+  stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.25, fill = "steelblue") +
+  stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.30, fill = "steelblue", fun.args = list(conf.int = .5)) +
+  geom_line(aes(round_nr, mean_1_m), size = 0.3) + theme_light() + labs(x= "Trial", y = "Volatility estimate")
+
+mu_2_1v0 <- ggplot(d1, aes(round_nr, mean_2))  +
+  stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.25, fill = "steelblue") +
+  stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.30, fill = "steelblue", fun.args = list(conf.int = .5)) +
+  geom_line(aes(round_nr, mean_2_m), size = 0.3)+ theme_light() + labs(x= "Trial", y = "Tempature estimate")
+
+ggsave(filename = "mu_1_1v0.png", plot = mu_1_1v0, path = "plots", width = 20, height = 20, units = "cm")
+ggsave(filename = "mu_2_1v0.png", plot = mu_2_1v0, path = "plots", width = 20, height = 20, units = "cm")
+
 ```
 
 
