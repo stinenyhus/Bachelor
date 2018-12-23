@@ -36,6 +36,18 @@ pacman::p_load(pacman, plyr, tidyverse, raster, reshape2, knitr, brms, boot, ret
 #Function for fetching payoff-matrices
 ```{r payoff matrix}  
 fetch_p_matrix <-  function(game, custom = c(0,0,0,0,0,0,0,0)) {
+  #Makes a payoff matrix for use in the simulation.
+  #String commands for getting pre-made matrices: 
+  #"staghunt" - the stag hunt game
+  #"penny_cooperative" - a cooperative penny matching game
+  #"penny_competitive" - a competitive penny matching game
+  #"prisoners_dilemma" - the prisoner's dilemma game
+  #"party" - the party dilemma game
+  #"sexes" - the battle of the sexes game
+  #"chicken" - the chicken game
+  #"deadlock" - a deadlock game
+  #if the string "custom" is used, a custom matrix can be specified by another argument custom = c(a,b,c,d,e,f,g,h), where each number is an entry in the payoff matrix
+  
   if (game == "staghunt") {
   p_matrix <-
   data_frame(
@@ -113,6 +125,17 @@ fetch_p_matrix <-  function(game, custom = c(0,0,0,0,0,0,0,0)) {
                    NA,NA,NA))
   return(p_matrix)
   
+  } else if (game == "deadlock") {
+  p_matrix <-
+  data_frame(
+    p1_choice = c(1,  0,  1,  0),
+    p2_choice = c(1,  1,  0,  0),
+    p1_reward = c(2,  0,  3,  1),
+    p2_reward = c(2,  3,  0,  1),
+    game_title = c(game, 
+                   NA,NA,NA))
+  return(p_matrix)
+  
   } else if (game == "custom") {
   p_matrix <-
   data_frame(  
@@ -131,13 +154,14 @@ fetch_p_matrix <-  function(game, custom = c(0,0,0,0,0,0,0,0)) {
 ```{r general functions}
 #Utility function
 U <- function(c_self, c_op, player, p_matrix){ 
+  #Returns the reward for a player given a payoff matrix and choices
   #INPUT
-    #a_self: choice of self
-    #a_op: choice of opponnent
+    #c_self: player's own choice
+    #c_op: opponent's choice
     #player: which side of the payof matrix is used. 0: first player, 1: second player
-    #returns the point reward
+    #p_matrix: a given 2-by-2 payoff matrix
   #OUTPUT
-    #The utility of of the given choices for the player.
+    #The reward for the specified player
   
   # get values from payoff matrix for player 1
   a_1 <- p_matrix$p1_reward[p_matrix$p1_choice == 1 & p_matrix$p2_choice == 1] #value if both choose 1
@@ -171,6 +195,13 @@ U <- function(c_self, c_op, player, p_matrix){
 
 #Expected payoff
 expected_payoff_difference <- function(p_op_1, player, p_matrix) {
+  #Returns the value difference between choosing 1 and 0 over opponent chocie scenarios, each scenario weighted by the probability of the opponent's choice
+  #INPUT
+    #p_op_1: estimated choice probability of the opponent
+    #player: the current player
+    #p_matrix: a given payoff matrix
+  #OUTPUT
+    #An expected payoff difference for 1
   
   e_payoff_dif <- 
     p_op_1 * (U(1, 1, player, p_matrix) - U(0, 1, player, p_matrix)) +
@@ -181,7 +212,12 @@ expected_payoff_difference <- function(p_op_1, player, p_matrix) {
 
 #Softmax function
 softmax <- function(e_payoff_diff, behavioural_temperature){
-  #Input
+  #Returns a choice probability for 1 given an expected payoff
+  #INPUT
+    #e_payoff_diff: an expected payoff difference for 1
+    #behavioural_temperature: a randomizing temperature parameter
+  #OUTPUT
+    #A choice probability for 1
   
   #prepare behavioural temperature
   behavioural_temperature <- exp(behavioural_temperature)
@@ -206,9 +242,14 @@ softmax <- function(e_payoff_diff, behavioural_temperature){
 ```{r simple agents}
 #A Human Player
 PlaySelf <- function(params = NULL, hidden_states = NULL, player = NULL, p_matrix = NULL, choice_self = NULL, choice_op = NULL, return_hidden_states = F, messages = T){ 
-  #DESCRIPTION
+  #Lets a human player make a choice
   #INPUT
+    #player: the current player role
+    #p_matrix: the current payoff matric
+    #choice_self: player's own choice on last round
+    #choice_op: opponent's choice last round
   #OUTPUT
+    #player's choice
   
   if (messages){
     #Responds from last round
@@ -274,12 +315,11 @@ PlaySelf <- function(params = NULL, hidden_states = NULL, player = NULL, p_matri
 
 #Random Choice with a Bias 
 RB <- function(params, hidden_states = NULL, player = NULL, p_matrix = NULL, choice_self = NULL, choice_op = NULL, return_hidden_states = F){ 
-  #RB: Random choice with a bias 
+  #RB: A Random Bias strategy choice. Selects randomly with a given probability
   #INPUT
-    #params: a list of 1 element, where the element is the prop of choosing 1 
+    #params: a list of 1 element, RB's choice probability parameter
   #OUTPUT
-    #Choice: 0 or 1
-    #Updated parameter: This is for consistency, but is in practice not used
+    #RB's choice
   
   #randomly select rabbit or stag (with a slight bias)
   choice <- rbinom(1, 1, prob = params$prop)
@@ -293,6 +333,11 @@ RB <- function(params, hidden_states = NULL, player = NULL, p_matrix = NULL, cho
 
 #Tit for Tat
 TFT <- function(params, hidden_states = NULL, player = NULL, p_matrix = NULL, choice_self, choice_op, return_hidden_states = F) {
+  #A probabilistic Tit for Tat strategy. Copies the opponent's last choice with a given probability.
+  #INPUT
+    #params: list of 1 element: TFT's choice probability parameter
+  #OUTPUT
+    #TFT's choice
   
   #The probability of TFT copying opponent's choice
   copy_prob = params$copy_prob
@@ -315,7 +360,11 @@ TFT <- function(params, hidden_states = NULL, player = NULL, p_matrix = NULL, ch
 
 ###Win-Stay-Loose-Switch
 WSLS <- function(params, hidden_states = NULL, player, p_matrix, choice_self, choice_op, return_hidden_states = F){
-  #WSLS: Win-stay-loose-switch
+  #A probabilistic Win-stay Loose-shift strategy. Copies itself if it won last round, does the opposite if it lost, both with given probabilities
+  #INPUT
+    #params: a list of two elements, WSLS's win stay probability parameter and loose shift probability parameter
+  #OUTPUT
+    #WSLS's choice
   
   if (is.null(choice_op)) { #initial round or missed trial
         choice <- rbinom(1, 1, 0.5) #make random choice
@@ -353,11 +402,17 @@ WSLS <- function(params, hidden_states = NULL, player, p_matrix, choice_self, ch
 ```
 
 #K-ToM functions
- 
+
 Learning function - 0ToM estimate update
 ```{r}
 basic_variance_update <- function(prev_hidden_states, params) {
-  #input
+  #0-ToM updates the variance of its parameter estimate
+  #INPUT
+    #prev_hidden_states: a list structure containing the states from last round
+    #params: a list structure containing 0-ToM's volatility parameter
+  #OUTPUT
+    #An updated estimate variance
+  
   volatility <- params$volatility #the volatility parameter reduces learning, assuming that there is noise in the opponents decisions
   prev_variance_basic <- prev_hidden_states$own_hidden_states$variance_basic #the uncertainty of opponent probability
   prev_mean_basic <- prev_hidden_states$own_hidden_states$mean_basic #the mean estimate of opponent probability
@@ -380,7 +435,14 @@ basic_variance_update <- function(prev_hidden_states, params) {
 }
 
 basic_mean_update <- function(prev_hidden_states, choices, variance_basic) {
-  #input
+    #0-ToM updates the mean of its parameter estimate
+  #INPUT
+    #prev_hidden_states: a list structure containing the states from last round
+    #choices: a vector of [1] own choice and [2] opponent's choice from last round
+    #variance_basic: the updated estimate variance
+  #OUTPUT
+    #An updated mean estimate
+  
   prev_c_op <- choices[2] #opponent's choice
   prev_mean_basic <- prev_hidden_states$own_hidden_states$mean_basic #the uncertainty of opponent probability
   variance_basic #the uncertainty of opponent probability
@@ -398,8 +460,12 @@ basic_mean_update <- function(prev_hidden_states, choices, variance_basic) {
 Learning function - update p(k)
 ```{r}
 p_op_1_k_approx_fun <- function(prev_hidden_states, level){
-  #this calculation uses a semi-analytical approximation by Daunizeau, J. (2017)
-  #this is the VBA_Elogsig
+  #Approximates the estimated choice probability of the opponent on the previous round. A semi-analytical approximation derived in Daunizeau, J. (2017)
+  #INPUT
+    #prev_hidden_states: a list structure containing the states from last round
+    #level: k-ToM's sophistication level
+  #OUTPUT
+    #An approximation of the estimated choice probability of last round.
   
   #input
   #for each sophistication level
@@ -432,6 +498,14 @@ p_op_1_k_approx_fun <- function(prev_hidden_states, level){
 }
 
 update_pk <- function(prev_hidden_states, choices, p_op_1_k_approx){
+  #Updates k-ToM's estimated probability of the opponent having each possible sophistication level.
+  #INPUT:
+    #prev_hidden_states: A list structure containing the states of last trial
+    #choices: a vector of [1] own choice and [2] opponent's choice from last round
+    #p_op_1_k_approx: an approximated opponent choice probability form last round
+  #OUTPUT
+    #The updated level probabilities
+  
   #input
   prev_c_op <- choices[2] #opponent's choice
   #for each sophistication level
@@ -456,12 +530,19 @@ update_pk <- function(prev_hidden_states, choices, p_op_1_k_approx){
   
   return(p_k)
 }
-
 ```
 
 Learning function - updating parameter estimates
 ```{r}
 parameter_variance_update <- function(prev_hidden_states, params, p_k) {
+  #k-ToM updates the variance of its parameter estimates
+  #INPUT
+    #prev_hidden_states: a list strucutre containing the states from the last round
+    #params: a list structure containing k-ToM's volatility parameter and a dummy parameter which decides which parmaeter estimates are affected by volatility
+    #p_k: a vector of level probabilities
+  #OUTPUT
+    #Updated variances of k-ToM's parameter estimates
+  
   #input
   volatility <- params$volatility
   volatility_dummy <- params$volatility_dummy #dummy parable flags which parameters are affected by volatility
@@ -492,6 +573,15 @@ parameter_variance_update <- function(prev_hidden_states, params, p_k) {
 }  
 
 parameter_mean_update <- function(prev_hidden_states, choices, p_k, variance){
+  #k-ToM updates the mean of its parameter estimates
+  #INPUT
+    #prev_hidden_states: a list strucutre containing the states from the last round
+    #choices: a vector of [1] own choice and [2] opponent's choice from last round
+    #p_k: a vector of level probabilities
+    #variance: k-ToM's variance on parameter estimates
+  #OUTPUT
+    #Updated means of k-ToM's parameter estimates
+  
   #input
   prev_c_op <- choices[2] #opponent's choice
   #for each sophistication level k:
@@ -513,12 +603,23 @@ parameter_mean_update <- function(prev_hidden_states, choices, p_k, variance){
   
   return(param_mean)
 }
-
 ```
 
 Learning function - updating gradient
 ```{r}
 gradient_update <- function(opponent_prev_hidden_states, params, mean, param_mean, reverse_choices, opponent_level, opponent_player, p_matrix.) {
+  #k-ToM calculates the gradient between parameter estimates and choice probability estimates
+    #INPUT
+    #opponent_prev_hidden_states:
+    #mean: the mean of k-ToM's choice probability estimate of its opponent
+    #param_mean: the means of k-ToM's parameter estimates
+    #reverse_choices: a vector of k-ToM's [1] opponent's choice and [2] own choice. Inserted as choices when simulating the opponent
+    #opponent_level: the level of the opponent for which the gradient is calculated
+    #opponent_player: the reverse player role of k-ToM's own. Inserted as player role when simulaitng the opponent
+    #p_matrix: a given 2-by-2 payoff matrix
+  #OUTPUT
+    #The gradient between each parameter estimate and the choice probability estimate
+  
   #input
   opponent_prev_hidden_states #opponent's hidden states, for running the learning function
   reverse_choices #opponent's perspective
@@ -580,6 +681,16 @@ rec_learning_function <- function(
   player,
   p_matrix
 ) {
+  #k-ToM's learning function, where it updates its level probability, parameter, choice probability and gradient etimates. This is called recursively.
+  #INPUT
+    #prev_hidden_states: a list structure containing the states from last round
+    #params: a list structure containing k-ToM's volatility parameter
+    #choices: a vector of [1] own choice and [2] opponent's choice from last round
+    #level: k-ToM's sophistication level
+    #player: k-ToM's player role, i.e. which side of the payoff matrix is used
+    #p_matrix: a given 2-by-2 payoff matrix
+  #OUTPUT:
+    #A list structure containing the updates estimates by k-ToM and all the recursively simulated opponents
   
   #p_matrix is stored under another name, to avoid recursion-related errors
   p_matrix. <- p_matrix
@@ -675,10 +786,13 @@ rec_learning_function <- function(
 
 Decision function - 0-ToM opponent probability
 ```{r}
-#Probability of opponnent a_op choosing 1
 basic_p_op_1_fun <- function(hidden_states, params){
-
-  #THIS IS THE VARIANT USED IN THE MATLAB CODE, WHICH DOES NOT USE VOLATILITY
+  #0-ToM combines the mean and variance of its parameter estimate into a final choice probability estimate.
+  #NB: this is the function taken from the VBA package (Daunizeau 2014), which does not use 0-ToM's volatility parameter
+  #INPUT
+    #hidden_states: 0-ToM's updated estimates for this round
+  #OUTPUT
+    #The estimated choice probability of the opponent
 
   #for each sophistication level k:
   mean_basic <- hidden_states$own_hidden_states$mean_basic #mean opponent probability estimate VECTOR
@@ -696,8 +810,14 @@ basic_p_op_1_fun <- function(hidden_states, params){
 
 # ##ALTERNATIVE VERSION
 # basic_p_op_1_fun <- function(hidden_states, params){
-# 
-#   #THIS IS THE VARIANT BASED ON THE EQUATIONS, BUT NOT USED IN THE MATLAB CODE
+#   #0-ToM combines the mean and variance of its parameter estimate into a final choice probability estimate.
+#   #NB: this is the theretically derived function shown in the Reading Wild Minds article (Devaine 2017), which does uses 0-ToM's volatility parameter. 
+#   #As a default the other variant is used
+#   #INPUT
+#     #hidden_states: 0-ToM's updated estimates for this round
+#     #params: a list structure containing 0-ToM's volatility parameter
+#   #OUTPUT
+#     #The estimated choice probability of the opponent
 # 
 #   #input
 #   volatility <- params$volatility
@@ -715,21 +835,24 @@ basic_p_op_1_fun <- function(hidden_states, params){
 # 
 #   return(p_op_1_basic)
 # }
-
 ```
 
 Decision function - opponent probability
 ```{r}
 #Probability of opponnent a_op choosing 1
 p_op_1_k_fun <- function(hidden_states, params){
-
-  #THIS IS THE VARIANT USED IN THE MATLAB CODE, WHICH DOES NOT USE VOLATILITY
+  #k-ToM combines the mean choice probability estimate and the variances of its parameter estimates into a final choice probability estimate.
+  #NB: this is the function taken from the VBA package (Daunizeau 2014), which does not use k-ToM's volatility parameter
+  #INPUT
+    #hidden_states: k-ToM's updated estimates for this round
+  #OUTPUT
+    #The estimated choice probabilities of the opponent, for each possible opponent level
 
   #for each sophistication level k:
   mean <- hidden_states$own_hidden_states$mean #mean opponent probability estimate VECTOR
   variance <- hidden_states$own_hidden_states$variance #variance of parameter estimates MATRIX
   gradient <- hidden_states$own_hidden_states$gradient
-  a <- 0.36 #this number is taken from the matlab code in ObsRecGen
+  a <- 0.36 #this number is taken from the VBA package function ObsRecGen
 
   #Prepare variance
   variance <- rowSums(exp(variance) * gradient^2) #summing the variances of each parameter (after weighting by gradient). One sum per sophistication level
@@ -742,8 +865,15 @@ p_op_1_k_fun <- function(hidden_states, params){
 
 # ##ALTERNATIVE VERSION
 # p_op_1_k_fun <- function(hidden_states, params){
+#   #k-ToM combines the mean choice probability estimate and the variances of its parameter estimates into a final choice probability estimate.
+#   #NB: this is the theretically derived function shown in the Reading Wild Minds article (Devaine 2017), which does uses k-ToM's volatility parameter. 
+#   #As a default the other variant is used
 # 
-#   #THIS IS THE VARIANT BASED ON THE EQUATIONS, BUT NOT USED IN THE MATLAB CODE
+#   #INPUT
+#     #hidden_states: k-ToM's updated estimates for this round
+#     #params: a list structure containing k-ToM's volatility parameter
+#   #OUTPUT
+#     #The estimated choice probabilities of the opponent, for each possible opponent level
 # 
 #   #input
 #   volatility <- params$volatility
@@ -776,6 +906,15 @@ decision_function <- function(
   level,
   p_matrix
 ) { 
+  #k-ToM's decision function, where it calculates its own choice probability based on the updated estimates
+  #INPUT
+    #hidden_states: k-ToM's updated estimates
+    #params: a list structure containing k-ToM's volatility and behavioural temperature parameters
+    #player: k-ToM's player role, i.e. which side of the payoff matrix is used
+    #level: k-ToM's sophistication level k
+    #p_matrix: a given 2-by-2 payoff matrix
+  #OUTPUT
+    #k-ToM's own choice probability
   
   if (level == 0) { #If the (simulated) agent is a 0-ToM
     
@@ -805,15 +944,22 @@ decision_function <- function(
   
   return(p_self_1)
   }
-
 ```
 
 Full k-ToM function
 ```{r}
 k_ToM <- function(params = "default", hidden_states, player, level = NULL, p_matrix, choice_self = NULL, choice_op = NULL, return_hidden_states = T) {
-  #DESCRIPTION:
+  #The full k-ToM function. First it first updates level probability, choice probability, parameter and gradient estimates. Then it calculates the estimated choice proability of the opponent, and calculates its own choice probability in response. The function also contains the simpler 0-ToM strategy, which only updates opponent's choice probability, and reacts.
   #INPUT:
+    #params: a list structure containing k-ToM's volatility parameter, the dummy variable which decides which parameter estimates are affected by volatility, and the behavioural temperature. If a string is inputted, default values are used.
+    #hidden_states: the estimates from last round
+    #player: k-ToM's player role, i.e. which side of the payoff matrix is used
+    #level: k-ToM's sophistication level k
+    #p_matrix: a given 2-by-2 payoff matrix
+    #choice_self: k-ToM's choice from last round
+    #choice_op: opponent's choice from last round
   #OUTPUT:
+    #a list structure containing k-ToM's choice and updated estimates
   
   if (class(params) != "list"){ #Use default parameter values if nothing else is specified
     message("No parameter values specified, using default values")
@@ -875,6 +1021,13 @@ k_ToM <- function(params = "default", hidden_states, player, level = NULL, p_mat
 Preparing hidden states for the k-ToM function
 ```{r}
 rec_prepare_k_ToM <- function(level, priors = "default") { 
+  #A recursive function for preparing the list structure containing estimates which is used in the k-ToM function.
+  #INPUT
+    #level: k-ToM's sophistication level k
+    #priors: a list structure containing all the prior values for k-ToM. If a string is given, default values are used.
+  #OUTPUT
+    #A list structure which is ued as the previous estimates in k-ToM's first round.
+  
   
   if (class(priors) != "list"){ #Use default priors if nothing else is specified
     
@@ -947,28 +1100,38 @@ rec_prepare_k_ToM <- function(level, priors = "default") {
 }
 ```
 
-#Prepare agents functions
+#Functions for preparing agents
 ```{r prepare}
 prepare <- function(strategy_string,
                     RB = c(prop_mean = 0.8,
                            prop_sd = 0.1),
+                    TFT = c(prob_mean = 0.9,
+                            prob_sd = 0.1),
                     WSLS = c(stay_mean = 0.9,
                              stay_sd = 0.1,
                              switch_mean = 0.9,
                              switch_sd = 0.1),
-                    TFT = c(prob_mean = 0.9,
-                            prob_sd = 0.1),
                     k_ToM = c(volatility_mean = -2,
                               volatility_sd = 0,
                               temperature_mean = -10,
                               temperature_sd = 0),
                     k_ToM_priors = "default"){  
+  #Function for generating parameter values and priors for an agent. Parameter values are specified as vectors, where the first number is the mean and the second number is the standard deviation of the normal distribution they are sampled from. If no values are specified, defaults are used. Only the values for the strategy specified are returned.
   #INPUT
-    #strategy_string: A string of the strategy the agents should apply
-    #rb_prop: - #
-    #
+    #strategy_string: A string of the strategy used by the agent. 
+      #Implemented agent strategies:
+        #RB: Random Bias
+        #TFT: Tit for Tat
+        #WSLS: Win-stay Loose-switch
+        #SoftmaxTitTat: A tit for tat using a softmax function as well as an utility function
+        #k-ToM: a k-level theory of mind agent. Note that you input the desired k-level in place of k, e.g. 1-ToM
+    #RB: A vector of mean and standard deviation of the choice probability parameter
+    #TFT: A vector of mean and standard deviation of the choice probability parameter
+    #WSLS: A vector of mean and standard deviation of the win stay probability and the loose shift parameters
+    #k_ToM: A vector of mean and standard deviation of the volatility and behavioural temperature parameters
+    #k_ToM_priors: A list structure containing priors for all of k-ToM's estimates. This is fed to the red_prepare_k_tom function. If a string is specified, defaults will be used
   #OUTPUT
-    #The prepared parameters of the agent.
+    #A list structure containing the sampled parameter values of the agent and the states for the first round (if any).
   
   if (strategy_string == "RB") { #For Random Bias
     params <- list(
@@ -1007,14 +1170,61 @@ prepare <- function(strategy_string,
   return(result)
 }
 
-prepare_df <- function(agent_df_unprep, args = NULL){ 
+create_agents <- function(strategies, match_up = "RR", prepare_with_defaults = T){
+  #Creates a dataframe with agents and their opponents.
+  #If prepare_with_defaults is set to TRUE, this also prepares their parameter values and priors, which can fed to the compete function.
+  #If prepare_with_defaults is set to FALSE, the output needs to be inserted into the prepare_df function.
   #INPUT
-    #agent_df a tibble prepared with prepare_agents
-    #args, a character vector of arguments to pass two the prepare function
-      #One string should be given pr. agents, an empty string simply used deffaults
-      #Note it prepared player1 then Player2 so all player1's should be first in the list
+    #strategies: A list of strategies given as a vector
+      #implemented agent strategies
+        #RB: Random Bias
+        #TFT: Tit for Tat
+        #WSLS: Win-stay Loose-switch
+        #SoftmaxTitTat: A tit for tat using a softmax function as well as an utility function
+        #k-ToM: a k-level theory of mind agent. Note that you input the desired k-level in place of k, e.g. 1-ToM
+  #match_up: a string argument deciding which tournament structure is used
+    #implemented matchup types include
+      #RR: Round robin, every strategy in the strategies input matched up against every other strategy
+      #random: The strategies in the strategies input is randomly matched up
+      #half_half: the first half is matched up with the second half
   #OUTPUT
-    #The agent_df with prepared features
+    #A dataframe with the created agents matched up. If prepare_with_defaults is set to TRUE, parameter values and priors have also been set.
+  
+  if (match_up == "RR"){
+    output <- as_data_frame(t(combn(strategies, 2))) %>% dplyr::select(player1 = V1, player2 = V2)
+  } else if (match_up == "half_half" & length(strategies) %% 2 == 0){
+    output <- as_data_frame(matrix(strategies, ncol = 2)) %>% dplyr::select(player1 = V1, player2 = V2)
+  } else if (match_up == "random" & length(strategies) %% 2 == 0){
+    output <- as_data_frame(matrix(sample(strategies, replace=F), ncol = 2)) %>% dplyr::select(player1 = V1, player2 = V2)
+  } else {
+    stop("Please input valid match_up type 
+         or if using 'half_half' or 'random' make sure that your strategies input has an even length")
+  }
+  
+  if (prepare_with_defaults){
+    
+        #calling the prepare function
+    tmp1 <- sapply(output$player1, prepare)
+    tmp2 <- sapply(output$player2, prepare)
+      #save params
+    output$params_p1 <- t(tmp1)[,1]
+    output$params_p2 <- t(tmp2)[,1]
+      #Save hidden states
+    output$hidden_states_p1 <- t(tmp1)[,2]
+    output$hidden_states_p2 <- t(tmp2)[,2]
+  }
+
+  return(output)
+}
+
+prepare_df <- function(agent_df_unprep, args = NULL){ 
+  #Sets parameter values and priors for agents in a matched-up dataframe, to be fed to the compete function. 
+  #INPUT
+    #agent_df_unprep: a tibble with agent strategies matched up, but without set parameter values and prios. Created by the prepare_agents function
+    #args, a string vector of arguments to pass to the prepare function
+      #Two string per competing pair, the first for player 1 and the second for player 2, in the order they appear in the dataframe
+  #OUTPUT
+    #A dataframe with agents matched up and with parameter values and priors, to be fed to the compete function
   
   p1_args <- args[1:(nrow(agent_df_unprep))]
   
@@ -1046,74 +1256,21 @@ prepare_df <- function(agent_df_unprep, args = NULL){
 }
 ```
 
-#Create agents functions
-```{r create agents} 
-create_agents <- function(strategies, match_up = "RR", prepare_with_defaults = T){
-  #strategies: a list of strategies given as a vector
-    #implemented agent strategies
-        #RB: Random Bias
-        #WSLS: Win Stay Loose Switch
-        #SoftmaxTitTat: A tit for tat using a softmax function as well as an utility function
-        #k-ToM: a k-level theory of mind agent (e.g. k=0 => 0-ToM) 
-          #Note that you input the desired k-level in place of k, e.g. 1-ToM
-  #match_up:
-    #implemented match up types include
-      #RR: Round robin, every strategy in the strategies input matched up against every other strategy
-      #random: The strategies in the strategies input is randomly matched up
-      #half_half: the first half is matched up with the second half
-  #prepare_with_defaults:
-    #if TRUE prepares the agents using their deffault setup
-    #if FALSE does not prepare the agents, in this case we refer to the prepare() function
-  #OUTPUT
-    #a dataframe with the created agent matched up and prepared if prepare_with_defaults is set to TRUE
-  
-  if (match_up == "RR"){
-    output <- as_data_frame(t(combn(strategies, 2))) %>% dplyr::select(player1 = V1, player2 = V2)
-  } else if (match_up == "half_half" & length(strategies) %% 2 == 0){
-    output <- as_data_frame(matrix(strategies, ncol = 2)) %>% dplyr::select(player1 = V1, player2 = V2)
-  } else if (match_up == "random" & length(strategies) %% 2 == 0){
-    output <- as_data_frame(matrix(sample(strategies, replace=F), ncol = 2)) %>% dplyr::select(player1 = V1, player2 = V2)
-  } else {
-    stop("Please input valid match_up type 
-         or if using 'half_half' or 'random' make sure that your strategies input has an even length")
-  }
-  
-  if (prepare_with_defaults){
-    
-        #calling the prepare function
-    tmp1 <- sapply(output$player1, prepare)
-    tmp2 <- sapply(output$player2, prepare)
-      #save params
-    output$params_p1 <- t(tmp1)[,1]
-    output$params_p2 <- t(tmp2)[,1]
-      #Save hidden states
-    output$hidden_states_p1 <- t(tmp1)[,2]
-    output$hidden_states_p2 <- t(tmp2)[,2]
-  }
-
-  return(output)
-}
-```
-
 #Compete function
 ```{r compete}
-compete_all <- function(agent_df, p_matrix, n_rounds = 10){  
-  #call the compete function for each pair in the agent_df
-  
-  #INPUT
-    #agent_df: A tibble (dataframe) of prepared agents resulting from create_agents()
-    #n_rounds: number of rounds
-    #p_matrix: The payoff matrix of the game you want them to be playing
-  #OUTPUT
-    #The results of the competitions as a tibble
-  
-  result_list <- apply(agent_df, 1, compete, n_rounds = n_rounds, p_matrix = p_matrix)
-  result_df <- result_list %>% bind_rows()
-  
-  return(result_df)
-}
-
 compete <- function(player1, player2, p1_params, p2_params, p1_hidden_states = NA, p2_hidden_states = NA, p_matrix, n_rounds = 10){ 
+  #Makes two agents play against each other a set number of rounds
+  #INPUT
+    #player1: player 1's strategy function
+    #player2: player 2's strategy function
+    #p1_params: a list structure containing player 1's parameter values
+    #p2_params: a list structure containing player 2's parameter values¨
+    #p1_hidden_states: player 1's starting states, i.e. priors
+    #p2_hidden_states: player 2's starting states, i.e. priors
+    #p_matrix: a given 2-by-2 payoff matrix
+    #n_rounds: number of rounds to compete
+  #OUTPUT
+    #A dataframe containing the two agents' choices, rewards and states, for each round
   
     #this is for when the compete_all function is used - it simply unpacks the apply function
   if (class(player1) == "list"){ 
@@ -1205,133 +1362,117 @@ compete <- function(player1, player2, p1_params, p2_params, p1_hidden_states = N
   if (progressbar) {close(pb)}
   return(result_df)
 }
+
+compete_all <- function(agent_df, p_matrix, n_rounds = 10){  
+  #A function for making all agents in a dataframe compete
+  #INPUT
+    #agent_df: A tibble (dataframe) with matched agents their parameter values and priors. Created with create_agents and/or prepare_df
+    #n_rounds: number of rounds the agents compete
+    #p_matrix: A given 2-by-2 payoff matrix
+  #OUTPUT
+    #A tibble (dataframe) containing the choices, rewards and states for every round, and for every competing pair
+  
+  result_list <- apply(agent_df, 1, compete, n_rounds = n_rounds, p_matrix = p_matrix)
+  result_df <- result_list %>% bind_rows()
+  
+  return(result_df)
+}
 ```
 #Simulation
 ```{r simulation}
 #Setting seed
 set.seed(2)
 
-
 #Get penny matrix
 penny_competitive_matrix = fetch_p_matrix("penny_competitive")
 
 #Simulation settings
-nsims = 10
+nsims = 20
 nrounds = 200
 
 #Define strategies used
-strategies_unprep <- c("RB", "0-ToM")
+strategies_unprep <- c("RB", "WSLS", "0-ToM", "1-ToM", "2-ToM", "3-ToM", "4-ToM", "5-ToM")
 
-result_list = NULL
-for (i in 1:nsims) {
-
-  #Prepare agents and competition dataframe
-  agent_df <- create_agents(strategies_unprep, match_up = "RR", prepare_with_defaults = T)
-
-  #Make all agents in the dataframe compete
-  result_df_single <- compete_all(agent_df, n_rounds = nrounds, p_matrix = penny_competitive_matrix)
-
-  #Add column with simulation number
-  result_df_single$sim = i
-
-  result_list[[i]] <- result_df_single
-}
-
-result_df <- result_list %>% bind_rows()
-eval(parse( text = paste("save(result_df_noa_, file = 'result_df_", x, ".rda')", sep = "")))
-
-
-# 
-# ####Self-similar priors ####
-# self_similar_priors <-
-#   list(mean_basic = 0, #agnostic
-#                    variance_basic = 0, #will be exponated, so exp(0) = 1
-#                    mean = 0, #agnostic
-#                    variance = c(0,0), #will be exponated, so exp(0) = 1
-#                    param_mean = c(-2 , -1), #not agnostic. These will be exponated efore being used as parameters. So this is a prior of exp(0) = 1
-#                    gradient = c(0,0) #is zero. in the Matlab script, one parameter was set to 1 if "flag for noisy" was set
-#                    )
-# 
-# #Put agents into a dataframe
-# agent_df_unprep <- create_agents(strategies_unprep, match_up = "RR", prepare_with_defaults = F)
-# 
-# for (x in 3:4) {
-#   rm(result_df)
+# for (x in 1:1) {
 #   result_list = NULL
 #   for (i in 1:nsims) {
 #     message(x);message(i)
-#     
-#     #Give agents their parameters and priors. Use the self-similar priors for k-ToM.
-#     agent_df <- prepare_df(agent_df_unprep, args = rep("k_ToM_priors = self_similar_priors", nrow(agent_df_unprep)*2))
+# 
+#     #Prepare agents and competition dataframe
+#     agent_df <- create_agents(strategies_unprep, match_up = "RR", prepare_with_defaults = T)
 # 
 #     #Make all agents in the dataframe compete
 #     result_df_single <- compete_all(agent_df, n_rounds = nrounds, p_matrix = penny_competitive_matrix)
 # 
 #     #Add column with simulation number
 #     result_df_single$sim = i
-#     
-#     result_list[[i]] <- result_df_single 
+# 
+#     result_list[[i]] <- result_df_single
 #   }
-#   
+# 
 #   result_df <- result_list %>% bind_rows()
-#   eval(parse( text = paste("save(result_df, file = 'result_df_selfsim_", x, ".rda')", sep = "")))
+#   eval(parse( text = paste("save(result_df_noa_, file = 'result_df_", x, ".rda')", sep = "")))
 # }
 
-
-```
-
-#Plotting
-```{r}
-
-```
-
-
-#Unused Code
-```{r}
-# #A single series competition
-# result_df <- compete(player1 = agent_df$player1,
-#               player2 = agent_df$player2,
-#               p1_params = agent_df$params_p1,
-#               p2_params = agent_df$params_p2,
-#               p1_hidden_states = agent_df$hidden_states_p1,
-#               p2_hidden_states = agent_df$hidden_states_p2,
-#               p_matrix = penny_competitive_matrix, #penny_competitive_matrix #prisoner_matrix
-#               n_rounds = 100
-#               )
  
-# name_to_text <- function(v1) {
-#   deparse(substitute(v1))
-# }
-# 
-# LOPS <- function(matrixie) {
-#   name_to_text(matrixie)
-# }
-# 
-# LOPS(penny_competitive_matrix)
-# 
-# myfunc(penny_competitive_matrix)
-# 
+####Self-similar priors ####
+self_similar_priors <-
+  list(mean_basic = 0, #agnostic
+                   variance_basic = 0, #will be exponated, so exp(0) = 1
+                   mean = 0, #agnostic
+                   variance = c(0,0), #will be exponated, so exp(0) = 1
+                   param_mean = c(-2 , -1), #not agnostic. These will be exponated efore being used as parameters. So this is a prior of exp(0) = 1
+                   gradient = c(0,0) #is zero. in the Matlab script, one parameter was set to 1 if "flag for noisy" was set
+                   )
+
+#Put agents into a dataframe
+agent_df_unprep <- create_agents(strategies_unprep, match_up = "RR", prepare_with_defaults = F)
+
+for (x in 1:2) {
+  
+  rm(result_df)
+  result_list = NULL
+  
+  for (i in 1:nsims) {
+    message(x);message(i)
+
+    #Give agents their parameters and priors. Use the self-similar priors for k-ToM.
+    agent_df <- prepare_df(agent_df_unprep, args = rep("k_ToM_priors = self_similar_priors", nrow(agent_df_unprep)*2))
+    
+    #Make all agents in the dataframe compete
+    result_df_single <- compete_all(agent_df, n_rounds = nrounds, p_matrix = penny_competitive_matrix)
+
+    #Add column with simulation number
+    result_df_single$sim = i
+    
+    result_list[[i]] <- result_df_single
+    
+  }
+  
+  result_df <- result_list %>% bind_rows()
+  eval(parse( text = paste("save(result_df, file = 'result_df_selfsim_", x, ".rda')", sep = "")))
+}
 
 ```
 
 #Human Player code
 ```{r}
-# #Fetch payoff-matrix
-# penny_competitive_matrix = fetch_p_matrix("penny_competitive")
-# p_matrix = penny_competitive_matrix
-# #Set opponent
-# agent_dfVS <- create_agents(c("PlaySelf", "RB"), match_up = "RR", prepare_with_defaults = T)
-# 
-# #Run game
-# result_df_player <- compete(player1 = agent_dfVS$player1,
-#               player2 = agent_dfVS$player2,
-#               p1_params = agent_dfVS$params_p1,
-#               p2_params = agent_dfVS$params_p2,
-#               p1_hidden_states = agent_dfVS$hidden_states_p1,
-#               p2_hidden_states = agent_dfVS$hidden_states_p2,
-#               p_matrix = penny_competitive_matrix, 
-#               n_rounds = 10
-#               )
+#Fetch payoff-matrix
+penny_competitive_matrix = fetch_p_matrix("penny_competitive")
+p_matrix = penny_competitive_matrix
+#Set opponent
+agent_dfVS <- create_agents(c("PlaySelf", "2-ToM"), match_up = "RR", prepare_with_defaults = T)
+
+#Run game
+result_df_player <- compete(player1 = agent_dfVS$player1,
+              player2 = agent_dfVS$player2,
+              p1_params = agent_dfVS$params_p1,
+              p2_params = agent_dfVS$params_p2,
+              p1_hidden_states = agent_dfVS$hidden_states_p1,
+              p2_hidden_states = agent_dfVS$hidden_states_p2,
+              p_matrix = penny_competitive_matrix,
+              n_rounds = 10
+              )
 ```
 
 

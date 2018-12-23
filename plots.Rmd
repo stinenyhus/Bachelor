@@ -215,7 +215,6 @@ d <- rbind(d, result_df)
 rm(result_df)
 unique(d$sim)
 
-
 sump <- d %>% group_by(sim, pair, player) %>% summarise(points = sum(points), total_rounds =  n())
   #the following command extract the op from the pair by only choosing the agent in the pair which is not the agent (notice that the result are transposed so that the op. is in the same order as players)
 sump$op <- t(str_split(sump$pair, pattern = " / ", simplify = T))[t(str_split(sump$pair, pattern = " / ", simplify = T) != sump$player)]
@@ -288,7 +287,7 @@ d1 <- filter(d, pair == "2-ToM / 5-ToM")
 p_k5v2 <- p_k_rep_sim(d = d1, agent = "5-ToM")
 
 d1 <- filter(d, pair == "2-ToM / 3-ToM")
-p_k3v2 <- p_k_rep_sim(d = d1, agent = "3-ToM")
+p_k3v2 <- p_k_rep_sim(d = d1, agent = "3-ToM") 
 
 d1 <- filter(d, pair == "0-ToM / 2-ToM")
 p_k2v0 <- p_k_rep_sim(d = d1, agent = "2-ToM")
@@ -313,7 +312,6 @@ for (i in plot_list){
     ggsave(filename = filename, plot = tmpplot, path = "plots", width = 20, height = 20, units = "cm")
   }
 }
-
 
 ```
 
@@ -362,6 +360,145 @@ ggsave(filename = "mu_1_1v0.png", plot = mu_1_1v0, path = "plots", width = 20, h
 ggsave(filename = "mu_2_1v0.png", plot = mu_2_1v0, path = "plots", width = 20, height = 20, units = "cm")
 
 ```
+
+
+#plotting all the things - Accurate priors
+```{r}
+load(file = "result_df_selfsim_1.rda")
+d <- result_df
+load(file = "result_df_selfsim_2.rda")
+result_df$sim <- result_df$sim + 25
+d <- rbind(d, result_df)
+
+sump <- d %>% group_by(sim, pair, player) %>% summarise(points = sum(points), total_rounds =  n())
+  #the following command extract the op from the pair by only choosing the agent in the pair which is not the agent (notice that the result are transposed so that the op. is in the same order as players)
+sump$op <- t(str_split(sump$pair, pattern = " / ", simplify = T))[t(str_split(sump$pair, pattern = " / ", simplify = T) != sump$player)]
+
+p_df <- sump %>% mutate(p_won = ((total_rounds + points)/2)/total_rounds) %>% group_by(pair, player, op) %>% summarise(mean_pwon = mean(p_won), sd_p_won = sd(p_won), ci_lower = ci(p_won)[2], ci_upper = ci(p_won)[3])
+
+# #all
+# heat1_all <- ggplot(p_df, aes(player, op)) + 
+#   geom_tile(aes(fill = mean_pwon), colour = "white") + 
+#   scale_fill_gradient(name = "Win %", low = "lightsteelblue1", high = "steelblue") + 
+#   geom_text(aes(label = paste(round(mean_pwon, 2)," (", round(ci_lower, 2), ", ", round(ci_upper, 2), ")", sep = "")  )) + 
+#   theme_classic() + labs(x = "Player 1", y = "Player 2")
+# 
+# p_df <- p_df %>% filter(!(player %in% c("WSLS", "RB")) & !(op %in% c("WSLS", "RB")))
+# 
+# #ToM's
+# heat2_all <- ggplot(p_df, aes(player, op)) + 
+#   geom_tile(aes(fill = mean_pwon), colour = "white") + 
+#   scale_fill_gradient(name = "Win %", low = "lightsteelblue1", high = "steelblue") + 
+#   geom_text(aes(label = paste(round(mean_pwon, 2)," (", round(ci_lower, 2), ", ", round(ci_upper, 2), ")", sep = "")  )) + 
+#   theme_classic() + labs(x = "Player 1", y = "Player 2")
+# 
+  #doing it with only 30 trials
+sump <- d %>% filter(round_nr < 31) %>% group_by(sim, pair, player) %>% summarise(points = sum(points), total_rounds =  n())
+sump$op <- t(str_split(sump$pair, pattern = " / ", simplify = T))[t(str_split(sump$pair, pattern = " / ", simplify = T) != sump$player)]
+
+p_df <- sump %>% mutate(p_won = ((total_rounds + points)/2)/total_rounds) %>% group_by(pair, player, op) %>% summarise(mean_pwon = mean(p_won), sd_p_won = sd(p_won), ci_lower = ci(p_won)[2], ci_upper = ci(p_won)[3])
+
+#with only 30 trials
+heat1_30 <- ggplot(p_df, aes(player, op)) +
+  geom_tile(aes(fill = mean_pwon), colour = "white") +
+  scale_fill_gradient(name = "Win %", low = "lightsteelblue1", high = "steelblue") +
+  geom_text(aes(label = paste(round(mean_pwon, 2)," (", round(ci_lower, 2), ", ", round(ci_upper, 2), ")", sep = "")  )) +
+  theme_classic() + labs(x = "Player 1", y = "Player 2")
+
+p_df <- p_df %>% filter(!(player %in% c("WSLS", "RB")) & !(op %in% c("WSLS", "RB")))
+
+#with only 30 trials - ToMs
+heat2_30 <- ggplot(p_df, aes(player, op)) +
+  geom_tile(aes(fill = mean_pwon), colour = "white") +
+  scale_fill_gradient(name = "Win %", low = "lightsteelblue1", high = "steelblue") +
+  geom_text(aes(label = paste(round(mean_pwon, 2)," (", round(ci_lower, 2), ", ", round(ci_upper, 2), ")", sep = "")  )) +
+  theme_classic() + labs(x = "Player 1", y = "Player 2")
+# 
+# unique(d$pair)
+# d1 <- filter(d, pair == "0-ToM / 1-ToM")
+# pwon1v0 <- quick_pwon_plot(d = d1, agent = "1-ToM")
+# d1 <- filter(d, pair == "1-ToM / 2-ToM")
+# pwon2v1 <- quick_pwon_plot(d = d1, agent = "2-ToM")
+# d1 <- filter(d, pair == "2-ToM / 4-ToM")
+# pwon4v2 <- quick_pwon_plot(d = d1, agent = "4-ToM")
+# d1 <- filter(d, pair == "4-ToM / 5-ToM")
+# pwon5v4 <- quick_pwon_plot(d = d1, agent = "5-ToM")
+
+# d1 <- filter(d, pair == "RB / 0-ToM")
+# plots <- oToM_plot(d = d1)
+# otom_mean <- plots[[1]]
+# otom_var <- plots[[2]]
+# 
+# d1 <- filter(d, pair == "1-ToM / 2-ToM")
+# p_k2v1 <- p_k_rep_sim(d = d1, agent = "2-ToM")
+# 
+# d1 <- filter(d, pair == "2-ToM / 5-ToM")
+# p_k5v2 <- p_k_rep_sim(d = d1, agent = "5-ToM")
+# 
+# d1 <- filter(d, pair == "2-ToM / 3-ToM")
+# p_k3v2 <- p_k_rep_sim(d = d1, agent = "3-ToM")
+
+#all all the plots 
+plot_list <- c("heat1_all", "heat2_all","heat1_30", "heat2_30", "pwon1v0", "pwon2v1", "pwon4v2", "pwon5v4", "otom_mean", "otom_var", "p_k2v1", "p_k5v2", "p_k3v2")
+plot_list <- c("heat1_30", "heat2_30")
+
+for (i in plot_list){
+  assign("tmpplot", eval(parse(text = i)))
+  filename <- paste(i, "selfsim.png", sep = "")
+  if (i == "p_k5v2"){
+    ggsave(filename = filename, plot = tmpplot, path = "plots", width = 30, height = 20, units = "cm")
+  } else if (grepl("heat",i)){
+    ggsave(filename = filename, plot = tmpplot, path = "plots", width = 30, height = 30, units = "cm")
+  } else {
+    ggsave(filename = filename, plot = tmpplot, path = "plots", width = 20, height = 20, units = "cm")
+  }
+}
+
+```
+
+
+#extracting parameters - selfim
+```{r}
+d1 <- d %>% filter(pair == "0-ToM / 1-ToM", player == "1-ToM")
+
+tmp <- lapply(d1$hidden_states, function(x) as_tibble(t(c( x$own_hidden_states$param_mean)))) %>% bind_rows()
+colnames(tmp) <- paste("mean_", seq(2), sep = "")
+d1 <- bind_cols(d1, tmp)
+d1 <- d1 %>% group_by(round_nr) %>% summarise(mean_1_m = mean(mean_1), mean_2_m = mean(mean_2)) %>% merge(.,d1)
+
+mu_1_1v0_selfsim = ggplot(d1, aes(round_nr, mean_1))  +
+  stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.25, fill = "steelblue") +
+  stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.30, fill = "steelblue", fun.args = list(conf.int = .5)) +
+  geom_line(aes(round_nr, mean_1_m), size = 0.3) + theme_light() + labs(x="Trial", y="Volatility estimate")
+
+mu_2_1v0_selfsim = ggplot(d1, aes(round_nr, mean_2))  +
+  stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.25, fill = "steelblue") +
+  stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.30, fill = "steelblue", fun.args = list(conf.int = .5)) +
+  geom_line(aes(round_nr, mean_2_m), size = 0.3) + theme_light() + labs(x="Trial", y="Temperature estimate")
+
+d1 <- d %>% filter(pair == "1-ToM / 2-ToM", player == "2-ToM")
+
+tmp <- lapply(d1$hidden_states, function(x) as_tibble(t(c( x$own_hidden_states$param_mean)))) %>% bind_rows()
+colnames(tmp) <- paste("mean_", seq(2), sep = "")
+d1 <- bind_cols(d1, tmp)
+d1 <- d1 %>% group_by(round_nr) %>% summarise(mean_1_m = mean(mean_1), mean_2_m = mean(mean_2)) %>% merge(.,d1)
+
+mu_1_2v1_selfsim = ggplot(d1, aes(round_nr, mean_1))  +
+  stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.25, fill = "steelblue") +
+  stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.30, fill = "steelblue", fun.args = list(conf.int = .5)) +
+  geom_line(aes(round_nr, mean_1_m), size = 0.3) + theme_light() + labs(x="Trial", y="Volatility estimate")
+
+mu_2_2v1_selfsim = ggplot(d1, aes(round_nr, mean_2))  +
+  stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.25, fill = "steelblue") +
+  stat_summary(fun.data=mean_cl_boot, geom="ribbon", alpha = 0.30, fill = "steelblue", fun.args = list(conf.int = .5)) +
+  geom_line(aes(round_nr, mean_2_m), size = 0.3) + theme_light() + labs(x="Trial", y="Temperature estimate")
+
+ggsave(filename = "mu_1_1v0_selfsim.png", plot = mu_1_1v0_selfsim, path = "plots", width = 20, height = 20, units = "cm")
+ggsave(filename = "mu_2_1v0_selfsim.png", plot = mu_2_1v0_selfsim, path = "plots", width = 20, height = 20, units = "cm")
+ggsave(filename = "mu_1_2v1_selfsim.png", plot = mu_1_1v0_selfsim, path = "plots", width = 20, height = 20, units = "cm")
+ggsave(filename = "mu_2_2v1_selfsim.png", plot = mu_2_1v0_selfsim, path = "plots", width = 20, height = 20, units = "cm")
+```
+
 
 
 ```{r}
