@@ -1,0 +1,1468 @@
+---
+title: "Game Theory Simulations"
+author: "K. C. Enevoldsen & P. Waade"
+date: "11/24/2018"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+#Packages and WD
+```{r setup, include=FALSE}
+# !diagnostics off
+#^the above argument prevents the mulitple 'unknown column' warnings (harmless warnings)
+knitr::opts_chunk$set(echo = TRUE)
+#devtools::install_github("thomasp85/patchwork")
+pacman::p_load(pacman, plyr, tidyverse, raster, reshape2, knitr, brms, boot, rethinking, groupdata2, patchwork, RColorBrewer)
+```
+
+#Function for fetching payoff-matrices
+```{r payoff matrix}  
+fetch_p_matrix <-  function(game, custom = c(0,0,0,0,0,0,0,0)) {
+  #Makes a payoff matrix for use in the simulation.
+  #String commands for getting pre-made matrices: 
+  #"staghunt" - the stag hunt game
+  #"penny_cooperative" - a cooperative penny matching game
+  #"penny_competitive" - a competitive penny matching game
+  #"prisoners_dilemma" - the prisoner's dilemma game
+  #"party" - the party dilemma game
+  #"sexes" - the battle of the sexes game
+  #"chicken" - the chicken game
+  #"deadlock" - a deadlock game
+  #if the string "custom" is used, a custom matrix can be specified by another argument custom = c(a,b,c,d,e,f,g,h), where each number is an entry in the payoff matrix
+  
+  if (game == "staghunt") {
+  p_matrix <-
+  data_frame(
+    p1_choice = c(1, 0, 1, 0),
+    p2_choice = c(1, 1, 0, 0),
+    p1_reward = c(5, 3, 0, 3),
+    p2_reward = c(5, 0, 3, 3),
+    game_title = c(game, 
+                   NA,NA,NA))
+  return(p_matrix)
+  
+  } else if (game == "penny_cooperative") {
+  p_matrix <-
+  data_frame(
+    p1_choice = c(1,  0,  1, 0),
+    p2_choice = c(1,  1,  0, 0),
+    p1_reward = c(1, -1, -1, 1),
+    p2_reward = c(1, -1, -1, 1),
+    game_title = c(game, 
+                   NA,NA,NA))
+  return(p_matrix)
+  
+  } else if (game == "penny_competitive") {
+  p_matrix <-
+  data_frame(
+    p1_choice = c( 1,  0,  1,  0),
+    p2_choice = c( 1,  1,  0,  0),
+    p1_reward = c(-1,  1,  1, -1),
+    p2_reward = c( 1, -1, -1,  1),
+    game_title = c(game, 
+                   NA,NA,NA))
+  return(p_matrix)
+  
+  } else if (game == "prisoners_dilemma") {
+  p_matrix <-
+  data_frame(
+    p1_choice = c(1, 0, 1, 0),
+    p2_choice = c(1, 1, 0, 0),
+    p1_reward = c(2, 3,-1, 0),
+    p2_reward = c(2,-1, 3, 0),
+    game_title = c(game, 
+                   NA,NA,NA))
+  return(p_matrix)
+  
+  } else if (game == "party") {
+  p_matrix <-
+  data_frame(
+    p1_choice = c(1,  0, 1, 0),
+    p2_choice = c(1,  1, 0, 0),
+    p1_reward = c(10, 0, 0, 5),
+    p2_reward = c(10, 0, 0, 5),
+    game_title = c(game, 
+                   NA,NA,NA))
+  return(p_matrix)
+  
+  } else if (game == "sexes") {
+  p_matrix <-
+  data_frame(
+    p1_choice = c(1,  0, 1, 0),
+    p2_choice = c(1,  1, 0, 0),
+    p1_reward = c(5,  0, 0, 10),
+    p2_reward = c(10, 0, 0, 5),
+    game_title = c(game, 
+                   NA,NA,NA))
+  return(p_matrix)
+  
+  } else if (game == "chicken") {
+  p_matrix <-
+  data_frame(
+    p1_choice = c(1,  0,  1,  0),
+    p2_choice = c(1,  1,  0,  0),
+    p1_reward = c(0, -1,  1, -1000),
+    p2_reward = c(0,  1, -1, -1000),
+    game_title = c(game, 
+                   NA,NA,NA))
+  return(p_matrix)
+  
+  } else if (game == "deadlock") {
+  p_matrix <-
+  data_frame(
+    p1_choice = c(1,  0,  1,  0),
+    p2_choice = c(1,  1,  0,  0),
+    p1_reward = c(2,  0,  3,  1),
+    p2_reward = c(2,  3,  0,  1),
+    game_title = c(game, 
+                   NA,NA,NA))
+  return(p_matrix)
+  
+  } else if (game == "custom") {
+  p_matrix <-
+  data_frame(  
+    p1_choice = c(1,          0,         1,         0),
+    p2_choice = c(1,          1,         0,         0),
+    p1_reward = c(custom[1], custom[3],  custom[5], custom[7]),
+    p2_reward = c(custom[2], custom[4],  custom[6], custom[8]),
+    game_title = c(game, 
+                   NA,NA,NA))
+  return(p_matrix)
+  }
+}
+
+```
+#General functions
+```{r general functions}
+#Utility function
+
+U <- function(c_self, c_op, player, p_matrix){ 
+  #Returns the reward for a player given a payoff matrix and choices
+  #INPUT
+    #c_self: player's own choice
+    #c_op: opponent's choice
+    #player: which side of the payof matrix is used. 0: first player, 1: second player
+    #p_matrix: a given 2-by-2 payoff matrix
+  #OUTPUT
+    #The reward for the specified player
+  
+  # get values from payoff matrix for player 1
+  a_1 <- p_matrix$p1_reward[p_matrix$p1_choice == 1 & p_matrix$p2_choice == 1] #value if both choose 1
+  b_1 <- p_matrix$p1_reward[p_matrix$p1_choice == 1 & p_matrix$p2_choice == 0] #value if self chooses 1 and opponent chooses 0
+  c_1 <- p_matrix$p1_reward[p_matrix$p1_choice == 0 & p_matrix$p2_choice == 1] #value if self chooses 0 and opponent chooses 1
+  d_1 <- p_matrix$p1_reward[p_matrix$p1_choice == 0 & p_matrix$p2_choice == 0] #value if both choose 0
+  
+  # get values from payoff matrix for player 2
+  a_2 <- p_matrix$p2_reward[p_matrix$p1_choice == 1 & p_matrix$p2_choice == 1] #value if both choose 1
+  b_2 <- p_matrix$p2_reward[p_matrix$p1_choice == 0 & p_matrix$p2_choice == 1] #value if self chooses 1 and opponent chooses 0
+  c_2 <- p_matrix$p2_reward[p_matrix$p1_choice == 1 & p_matrix$p2_choice == 0] #value if self chooses 0 and opponent chooses 1
+  d_2 <- p_matrix$p2_reward[p_matrix$p1_choice == 0 & p_matrix$p2_choice == 0] #value if both choose 0
+  
+  # calculate reward
+  reward <- 
+    (1-player) * #for player 1
+      (c_self * c_op * a_1 +           #if both choose 1 
+       c_self * (1 - c_op) * b_1 +     #if you choose 1 and opponent chooses 0
+       (1 - c_self) * c_op * c_1 +     #if you choose 0 and the opponent chooses 1
+       (1 - c_self) * (1 - c_op) * d_1 #if both choose 0
+       ) + 
+    player * #for player 2
+      (c_self * c_op * a_2 +           #if both choose 1 
+       c_self * (1 - c_op) * b_2 +     #if you choose 1 and opponent chooses 0
+       (1 - c_self) * c_op * c_2 +     #if you choose 0 and the opponent chooses 1
+       (1 - c_self) * (1 - c_op) * d_2 #if both choose 0
+       )
+  
+  return(reward)
+}
+
+#Expected payoff
+expected_payoff_difference <- function(p_op_1, player, p_matrix) {
+  #Returns the value difference between choosing 1 and 0 over opponent chocie scenarios, each scenario weighted by the probability of the opponent's choice
+  #INPUT
+    #p_op_1: estimated choice probability of the opponent
+    #player: the current player
+    #p_matrix: a given payoff matrix
+  #OUTPUT
+    #An expected payoff difference for 1
+  
+  e_payoff_dif <- 
+    p_op_1 * (U(1, 1, player, p_matrix) - U(0, 1, player, p_matrix)) +
+    (1 - p_op_1) * (U(1, 0, player, p_matrix) - U(0, 0, player, p_matrix))
+  
+  return(e_payoff_dif)
+}
+
+#Softmax function
+softmax <- function(e_payoff_diff, behavioural_temperature){
+  #Returns a choice probability for 1 given an expected payoff
+  #INPUT
+    #e_payoff_diff: an expected payoff difference for 1
+    #behavioural_temperature: a randomizing temperature parameter
+  #OUTPUT
+    #A choice probability for 1
+  
+  #prepare behavioural temperature
+  behavioural_temperature <- exp(behavioural_temperature)
+  
+  #Calculate probability of choosing 1
+  p_self_1 <- 1 / (1 + exp(-(e_payoff_diff / behavioural_temperature)))
+  
+  #Make an upper bound on softmax's output to avoid getting infinite values when transforming to logodds
+  if (p_self_1 > 0.999) {
+    p_self_1 = 0.999
+  }
+  #Similarily, make a lower bound
+  if (p_self_1 < 0.001) {
+    p_self_1 = 0.001
+  }
+  
+  return(p_self_1)
+}
+```
+
+#Simple Agents functions
+```{r simple agents}
+#A Human Player
+PlaySelf <- function(params = NULL, hidden_states = NULL, player = NULL, p_matrix = NULL, choice_self = NULL, choice_op = NULL, return_hidden_states = F, messages = T){ 
+  #Lets a human player make a choice
+  #INPUT
+    #player: the current player role
+    #p_matrix: the current payoff matric
+    #choice_self: player's own choice on last round
+    #choice_op: opponent's choice last round
+  #OUTPUT
+    #player's choice
+  
+  if (messages){
+    #Responds from last round
+    if (is.null(choice_op) == F){ #if there was a previous round
+      
+      #Print the choices and rewards form last round
+      message(paste("Last round you chose: ", choice_self, 
+                    ". Your opponent chose: ", choice_op, 
+                    ". Your score was: ", U(choice_self, choice_op, player, p_matrix),
+                    ".", sep = ""))
+      
+      #Remind how to see the payoff matrix
+      message("If you want to print the payoff matrix again, respond 'print'")
+      
+    } else {
+      #Say which player you are
+      message(paste("You are player", player + 1))
+      
+      #Fetch the name if the game and say it
+      game_string <-p_matrix$game_title[1]
+      game_string <- str_replace(game_string, "_matrix", "")
+      message(paste("You are currently playing the ", game_string, " game.",sep = ""))
+      
+      #Show the payoff matrix
+      message("The following is the payoff matrix for this game:")
+      print(p_matrix[1:4])
+    }
+  }
+  
+  choice = NA
+  while(choice %in% c(1, 0) == F){ #waiting for player to make a choice
+    
+    if (choice %in%  c("print", "Print", "'print'")){ #If they write print
+      
+      #Fetch the name if the game and say it
+      game_string <-p_matrix$game_title[1]
+      game_string <- str_replace(game_string, "_matrix", "")
+      message(paste("You are currently playing the ", game_string, " game.",sep = ""))
+      
+      #Say which player the human is
+      message(paste("You are player", player + 1))
+      
+      #Print the payoff matrix
+      message("The following is the payoff matrix for this game:")
+      print(p_matrix[1:4])
+      
+    } else if (is.na(choice) == F) { #If they write something that doesn't make sense
+      message("invalid response, please try again.")
+    }
+    
+    #Get choice from player
+    choice <- readline(prompt = "What do you choose this round? Respond 1 or 0: ")
+    
+  }
+
+  
+  if (return_hidden_states == T){
+    return(list(choice = as.numeric(choice), hidden_states = hidden_states))
+  } else {
+    return(as.numeric(choice))
+  }
+}
+
+#Random Choice with a Bias 
+RB <- function(params, hidden_states = NULL, player = NULL, p_matrix = NULL, choice_self = NULL, choice_op = NULL, return_hidden_states = F){ 
+  #RB: A Random Bias strategy choice. Selects randomly with a given probability
+  #INPUT
+    #params: a list of 1 element, RB's choice probability parameter
+  #OUTPUT
+    #RB's choice
+  
+  #randomly select rabbit or stag (with a slight bias)
+  choice <- rbinom(1, 1, prob = params$prop)
+  
+  if (return_hidden_states == T){
+    return(list(choice = choice, hidden_states = hidden_states))
+  } else {
+    return(choice)
+  }
+}
+
+#Tit for Tat
+TFT <- function(params, hidden_states = NULL, player = NULL, p_matrix = NULL, choice_self, choice_op, return_hidden_states = F) {
+  #A probabilistic Tit for Tat strategy. Copies the opponent's last choice with a given probability.
+  #INPUT
+    #params: list of 1 element: TFT's choice probability parameter
+  #OUTPUT
+    #TFT's choice
+  
+  #The probability of TFT copying opponent's choice
+  copy_prob = params$copy_prob
+  
+  if (is.null(choice_op)) { #initial round or missed trial
+    choice <- rbinom(1, 1, 0.5) #make random choice
+  } else {
+    #Decide whether TFT copies opponent
+    copy = rbinom(1, 1, copy_prob)
+    #Calculate resulting choice
+    choice = copy*choice_op + (1-copy)*(1-choice_op)
+  }
+  
+    if (return_hidden_states == T){
+    return(list(choice = choice, hidden_states = hidden_states))
+  } else {
+    return(choice)
+  }
+}
+
+###Win-Stay-Loose-Switch
+WSLS <- function(params, hidden_states = NULL, player, p_matrix, choice_self, choice_op, return_hidden_states = F){
+  #A probabilistic Win-stay Loose-shift strategy. Copies itself if it won last round, does the opposite if it lost, both with given probabilities
+  #INPUT
+    #params: a list of two elements, WSLS's win stay probability parameter and loose shift probability parameter
+  #OUTPUT
+    #WSLS's choice
+  
+  if (is.null(choice_op)) { #initial round or missed trial
+        choice <- rbinom(1, 1, 0.5) #make random choice
+  } else {
+  
+    #Read in parameters
+    stay_prob <- params$stay_prob
+    switch_prob <- params$switch_prob
+    #Read in score from last round
+    prev_reward <- U(choice_self, choice_op, player, p_matrix)
+  
+    #Calculate the mean of all possible rewards for current player
+    mean_reward <- (1 - player) * mean(p_matrix$p1_reward) + player * mean(p_matrix$p2_reward)
+    
+    #Calculate choice
+    if (prev_reward > mean_reward) { #if the agent won, i.e. got more than mean amount of points
+      stay <- rbinom(1, 1, stay_prob) #decide whether agent stays
+      choice <- stay * choice_self + (1-stay) * (1-choice_self) #staying -> same choice as last
+      
+    } else if (prev_reward < mean_reward) { #if the agent lost, i.e. got less than mean score
+      switch <- rbinom(1, 1, switch_prob) #decide whether agent switches
+      choice <- switch * (1-choice_self) + (1-switch) * choice_self #switching -> opposite choice of last
+      
+    } else if (prev_reward == mean_reward) { #if the agent got mean score
+      choice <- rbinom(1, 1, 0.5) #make random choice
+    }
+  }
+  
+  if (return_hidden_states == T){
+    return(list(choice = choice, hidden_states = hidden_states))
+  } else {
+    return(choice)
+  }
+}
+```
+
+#K-ToM functions
+Learning function - 0ToM estimate update
+```{r}
+basic_variance_update <- function(prev_hidden_states, params) {
+  #0-ToM updates the variance of its parameter estimate
+  #INPUT
+    #prev_hidden_states: a list structure containing the states from last round
+    #params: a list structure containing 0-ToM's volatility parameter
+  #OUTPUT
+    #An updated estimate variance
+  
+  volatility <- params$volatility #the volatility parameter reduces learning, assuming that there is noise in the opponents decisions
+  prev_variance_basic <- prev_hidden_states$own_hidden_states$variance_basic #the uncertainty of opponent probability
+  prev_mean_basic <- prev_hidden_states$own_hidden_states$mean_basic #the mean estimate of opponent probability
+  
+  #prepare volatility
+  volatility <- exp(volatility)
+  #prepare variance 
+  prev_variance_basic <- exp(prev_variance_basic)
+  
+  #calculate the new variance
+  variance_basic <- 
+    1 / (
+      (1 / (volatility + prev_variance_basic)) +
+        inv.logit(prev_mean_basic) * (1 - inv.logit(prev_mean_basic)))
+  
+  #logistic transform
+  variance_basic <- log(variance_basic)
+  
+  return(variance_basic)
+}
+
+basic_mean_update <- function(prev_hidden_states, choices, variance_basic) {
+    #0-ToM updates the mean of its parameter estimate
+  #INPUT
+    #prev_hidden_states: a list structure containing the states from last round
+    #choices: a vector of [1] own choice and [2] opponent's choice from last round
+    #variance_basic: the updated estimate variance
+  #OUTPUT
+    #An updated mean estimate
+  
+  prev_c_op <- choices[2] #opponent's choice
+  prev_mean_basic <- prev_hidden_states$own_hidden_states$mean_basic #the uncertainty of opponent probability
+  variance_basic #the uncertainty of opponent probability
+  
+  #prepare variance
+  variance_basic <- exp(variance_basic)
+  
+  #calculate the new mean
+  mean_basic <- prev_mean_basic + variance_basic * (prev_c_op - inv.logit(prev_mean_basic))
+  
+  return(mean_basic)
+}
+```
+
+Learning function - update p(k)
+```{r}
+p_op_1_k_approx_fun <- function(prev_hidden_states, level){
+  #Approximates the estimated choice probability of the opponent on the previous round. A semi-analytical approximation derived in Daunizeau, J. (2017)
+  #INPUT
+    #prev_hidden_states: a list structure containing the states from last round
+    #level: k-ToM's sophistication level
+  #OUTPUT
+    #An approximation of the estimated choice probability of last round.
+  
+  #input
+  #for each sophistication level
+  prev_mean <- prev_hidden_states$own_hidden_states$mean # mean of opponent probability estimation VECTOR
+  prev_variance <- prev_hidden_states$own_hidden_states$variance # the variance for each estimated parameter MATRIX
+  prev_gradient <- prev_hidden_states$own_hidden_states$gradient # gradients for each parameter MATRIX
+  
+  #constants
+  a <- 0.205
+  b <- -0.319
+  c <- 0.781
+  d <- 0.870
+  
+  #prepare variance
+  prev_variance_prepared <- NULL #make empty list
+  #variance is exponated, gradient is squared
+  for (level_index in 1:level) { #for each level
+    #matrix-mutliply the transposed variances on the gradient. This gives a single value
+    prev_variance_prepared[level_index] <- t(exp(prev_variance[level,])) %*% prev_gradient[level,]^2 
+  }
+  
+  #calculate estimated probability of opponent choice
+  p_op_1_k_approx <- 
+   inv.logit((prev_mean + b * prev_variance_prepared^c) / sqrt(1 + a * prev_variance_prepared^d))
+ 
+  #log-transform
+  p_op_1_k_approx <- log(p_op_1_k_approx)
+  
+  return(p_op_1_k_approx)
+}
+
+update_pk <- function(prev_hidden_states, params, choices, p_op_1_k_approx){
+  #Updates k-ToM's estimated probability of the opponent having each possible sophistication level.
+  #INPUT:
+    #prev_hidden_states: A list structure containing the states of last trial
+    #choices: a vector of [1] own choice and [2] opponent's choice from last round
+    #p_op_1_k_approx: an approximated opponent choice probability form last round
+  #OUTPUT
+    #The updated level probabilities
+  
+  #input
+  prev_c_op <- choices[2] #opponent's choice
+  dilution = inv.logit(params$dilution)
+  #for each sophistication level
+  prev_p_k <- prev_hidden_states$own_hidden_states$p_k  # probability of sophistication level k VECTOR
+  p_op_1_k_approx # probability of opponent choosing 1, approximated semi-analytically VECTOR
+  
+  #prepare probability
+  p_op_1_k_approx <- exp(p_op_1_k_approx)
+  
+  #Do partial forgetting of p_k from last trial
+  if ("dilution" %in% names(params)) { #only if there is a dilution parameter
+    prev_p_k = (1 - dilution) * prev_p_k + dilution / length(prev_p_k)
+  }
+  
+  #calculate probability of each possible sophistication level
+  p_k <-
+    prev_c_op* #if opponent chose 1
+    ((prev_p_k*p_op_1_k_approx)/sum(prev_p_k*p_op_1_k_approx)) + 
+    (1-prev_c_op)* #if opponent chose 0
+    (prev_p_k*(1-p_op_1_k_approx)/sum(prev_p_k*(1-p_op_1_k_approx))) 
+  
+  if (length(p_k) > 1) { #if higher than a 1-ToM
+      #Force 0-ToM probability so that the probabilities sum to 1
+      p_k[1] <- 
+    1 - sum(p_k[2:length(p_k)])
+  }
+  
+  return(p_k)
+}
+```
+
+Learning function - updating parameter estimates
+```{r}
+parameter_variance_update <- function(prev_hidden_states, params, p_k) {
+  #k-ToM updates the variance of its parameter estimates
+  #INPUT
+    #prev_hidden_states: a list strucutre containing the states from the last round
+    #params: a list structure containing k-ToM's volatility parameter and a dummy parameter which decides which parmaeter estimates are affected by volatility
+    #p_k: a vector of level probabilities
+  #OUTPUT
+    #Updated variances of k-ToM's parameter estimates
+  
+  #input
+  volatility <- params$volatility
+  volatility_dummy <- params$volatility_dummy #dummy parable flags which parameters are affected by volatility
+  #for each k:
+  prev_param_mean <- prev_hidden_states$own_hidden_states$param_mean #the mean for each estimated parameter MATRIX
+  prev_variance <- prev_hidden_states$own_hidden_states$variance #the uncertainty for each estimated parameter MATRIX
+  prev_gradient <- prev_hidden_states$own_hidden_states$gradient #the gradient for each estimated parameter MATRIX
+  p_k #the probability of sopistication level k VECTOR
+  
+  #prepare volatility
+  volatility <- exp(volatility)*volatility_dummy
+  volatility = t(replicate(length(prev_variance[,1]), volatility)) #Broadcasting volatility for proper matrix addition
+  
+  #prepare variance
+  prev_variance <- exp(prev_variance)
+  
+  #calculate new variance
+  variance <- 
+  1 / 
+    (1 / (prev_variance + volatility) + 
+       p_k * 
+       inv.logit(prev_param_mean) * (1 - inv.logit(prev_param_mean)) * 
+       prev_gradient^2)
+  
+  #logistic transform
+  variance <- log(variance)
+  
+  return(variance)
+}  
+
+parameter_mean_update <- function(prev_hidden_states, choices, p_k, variance){
+  #k-ToM updates the mean of its parameter estimates
+  #INPUT
+    #prev_hidden_states: a list strucutre containing the states from the last round
+    #choices: a vector of [1] own choice and [2] opponent's choice from last round
+    #p_k: a vector of level probabilities
+    #variance: k-ToM's variance on parameter estimates
+  #OUTPUT
+    #Updated means of k-ToM's parameter estimates
+  
+  #input
+  prev_c_op <- choices[2] #opponent's choice
+  #for each sophistication level k:
+  prev_mean <- prev_hidden_states$own_hidden_states$mean #the mean of opponent probability estimation VECTOR
+  prev_param_mean <- prev_hidden_states$own_hidden_states$param_mean #the mean for each estimated parameter MATRIX
+  prev_gradient <- prev_hidden_states$own_hidden_states$gradient #the gradient for each estimated parameter MATRIX
+  p_k #the probability of sophistication level k VECTOR
+  variance #the variance of each estimated parameter MATRIX
+  
+  #prepare variance
+  variance <- exp(variance)*prev_gradient
+  
+  #calculate new mean estimates
+  param_mean <- 
+    prev_param_mean + p_k * variance * (prev_c_op - inv.logit(prev_mean))
+  
+  #?# "for numerical purposes" - unsure if necessary
+  #param_mean <- inv.logit(logit(param_mean))
+  
+  return(param_mean)
+}
+```
+
+Learning function - updating gradient
+```{r}
+gradient_update <- function(opponent_prev_hidden_states, params, mean, param_mean, reverse_choices, opponent_level, opponent_player, p_matrix.) {
+  #k-ToM calculates the gradient between parameter estimates and choice probability estimates
+    #INPUT
+    #opponent_prev_hidden_states:
+    #mean: the mean of k-ToM's choice probability estimate of its opponent
+    #param_mean: the means of k-ToM's parameter estimates
+    #reverse_choices: a vector of k-ToM's [1] opponent's choice and [2] own choice. Inserted as choices when simulating the opponent
+    #opponent_level: the level of the opponent for which the gradient is calculated
+    #opponent_player: the reverse player role of k-ToM's own. Inserted as player role when simulaitng the opponent
+    #p_matrix: a given 2-by-2 payoff matrix
+  #OUTPUT
+    #The gradient between each parameter estimate and the choice probability estimate
+  
+  #input
+  opponent_prev_hidden_states #opponent's hidden states, for running the learning function
+  reverse_choices #opponent's perspective
+  opponent_level #
+  opponent_player #
+  mean #the mean of opponent probability estimation VECTOR
+  param_mean #the mean for each estimated parameter MATRIX
+  
+  #Make empty list for filling in gradients
+  gradient <- NULL
+  
+  for (param in 1:length(param_mean)) {
+    
+      #calculate increment
+      increment <- max(abs(1e-4*param_mean[param]), 1e-4)
+      
+      #use the parameter estimates
+      param_mean_incremented <- param_mean 
+      #but use one of the incremented instead
+      param_mean_incremented[param] <- param_mean[param] + increment
+      
+      #Make a list of parameters identical to own
+      opponent_params <- params
+
+      #But insert the estimated parameters values
+      for (estim_param in 1:length(param_mean)) {
+        opponent_params[estim_param] = param_mean_incremented[estim_param]
+      }
+      
+      # #Make a list of parameters for insertion
+      # opponent_params <- list(
+      #   volatility = param_mean_incremented[1], #volatility is the first column in the matrix
+      #   behavioural_temperature = param_mean_incremented[2], #temperature is the second column in the matrix
+      #   bias = param_mean_incremented[3],
+      #   volatility_dummy = params$volatility_dummy
+      # )
+      
+      #run the learning function of opponent using param_mean_temp as parameter values
+      opponent_hidden_states_incremented <- rec_learning_function(prev_hidden_states = opponent_prev_hidden_states, 
+                                                           params = opponent_params, 
+                                                           choices = reverse_choices,
+                                                           level = opponent_level,
+                                                           player = opponent_player,
+                                                           p_matrix = p_matrix.) 
+      
+      #run the decision function of opponent using the temporary hidden states
+      mean_incremented <- decision_function(hidden_states = opponent_hidden_states_incremented,
+                                           params = opponent_params,
+                                           player = opponent_player,
+                                           level = opponent_level,
+                                           p_matrix = p_matrix.)
+      
+      #calculate the gradient between parameter increment and probability estimate
+      gradient[param] <- (mean_incremented - mean)/increment
+  }
+  
+  return(gradient)
+}
+```
+
+Full learning function
+```{r}  
+rec_learning_function <- function(
+  prev_hidden_states,
+  params,
+  choices,
+  level,
+  player,
+  p_matrix
+) {
+  #k-ToM's learning function, where it updates its level probability, parameter, choice probability and gradient etimates. This is called recursively.
+  #INPUT
+    #prev_hidden_states: a list structure containing the states from last round
+    #params: a list structure containing k-ToM's volatility parameter
+    #choices: a vector of [1] own choice and [2] opponent's choice from last round
+    #level: k-ToM's sophistication level
+    #player: k-ToM's player role, i.e. which side of the payoff matrix is used
+    #p_matrix: a given 2-by-2 payoff matrix
+  #OUTPUT:
+    #A list structure containing the updates estimates by k-ToM and all the recursively simulated opponents
+  
+  #p_matrix is stored under another name, to avoid recursion-related errors
+  p_matrix. <- p_matrix
+  
+  #Make empty list for filling with updated values
+  new_hidden_states <- list()
+  
+  if (level == 0) { #If the (simulated) agent is a 0-ToM
+    
+    #Update 0-ToM's uncertainty of opponent choice probability
+    variance_basic <- basic_variance_update(prev_hidden_states, params)
+    
+    #Update 0-ToM's mean estimate of opponent choice probability
+    mean_basic <- basic_mean_update(prev_hidden_states, choices, variance_basic)
+    
+    #Gather own hidden states into one list
+    own_hidden_states <- list(mean_basic = mean_basic, variance_basic = variance_basic)
+    
+  } else { #If the (simulated) agent is a K-ToM
+  
+    #Update p_k
+    p_op_1_k_approx <- p_op_1_k_approx_fun(prev_hidden_states, level)
+    p_k <- update_pk(prev_hidden_states, params, choices, p_op_1_k_approx)
+    
+    #Update parameter estimates
+    variance <- parameter_variance_update(prev_hidden_states, params, p_k)
+    param_mean <- parameter_mean_update(prev_hidden_states, choices, p_k, variance)
+    
+    #Make empty structures for filling in new means
+    mean <- NULL
+    gradient <- matrix(NA, ncol = ncol(param_mean), nrow = level) #An empty matrix with a column for each parameter and a row for each level
+    
+    #Prepare opponent's perspective
+    reverse_choices <- choices[2:1]
+    opponent_player <- 1-player
+    
+    #Now we need to go through each possible opponent's level one at a time. Highest opponent level is 1 lower than own level
+    for (level_index in 1:level) {
+      
+      #Set the simulated opponents level. "level_index" is one higher than the actual level because it isn't possible to index 0
+      opponent_level <- level_index-1
+      #Extract the currently simulated opponent's hidden states
+      opponent_hidden_states <- prev_hidden_states[[level_index]]
+      
+      #Make a list identical to own parameters
+      opponent_params <- params
+      #But insert estimated parameter values
+      for (estim_param in 1:length(param_mean)) {
+        opponent_params[estim_param] = param_mean[level_index, estim_param]
+      }
+      
+      #Simulate opponent learning
+      new_opponent_hidden_states <- rec_learning_function(prev_hidden_states = opponent_hidden_states,
+                                                     params = opponent_params,
+                                                     choices = reverse_choices,
+                                                     level = opponent_level,
+                                                     player = opponent_player,
+                                                     p_matrix = p_matrix.) 
+      
+      #Simulate opponent deciding
+      mean[level_index] <- decision_function(hidden_states = new_opponent_hidden_states,
+                                            params = opponent_params,
+                                            player = opponent_player,
+                                            level = opponent_level,
+                                            p_matrix = p_matrix.)
+      
+      #Update gradient
+      gradient[level_index,] <- gradient_update(opponent_prev_hidden_states = opponent_hidden_states,
+                                               params = params,
+                                               mean = mean[level_index],
+                                               param_mean = param_mean[level_index,], #only input the param_mean for the current level
+                                               reverse_choices = reverse_choices,
+                                               opponent_level = opponent_level,
+                                               opponent_player = opponent_player,
+                                               p_matrix. = p_matrix.)
+      
+      #Save opponent's hidden states in the list structure. Name it k-ToM
+      eval(parse(text = paste(
+        "new_hidden_states$ToM_", 
+        opponent_level,
+        " = new_opponent_hidden_states",
+        sep = "")))
+    }
+    
+    #Gather own hidden states into one list
+    own_hidden_states <- list(p_k = p_k, mean = mean, param_mean = param_mean, variance = variance, gradient = gradient)
+  }
+  
+  #Save own updated hidden states to new hidden states
+  new_hidden_states$own_hidden_states <- own_hidden_states
+  
+  return(new_hidden_states)
+}
+```
+
+Decision function - 0-ToM opponent probability
+```{r}
+basic_p_op_1_fun <- function(hidden_states, params){
+  #0-ToM combines the mean and variance of its parameter estimate into a final choice probability estimate.
+  #NB: this is the function taken from the VBA package (Daunizeau 2014), which does not use 0-ToM's volatility parameter
+  #INPUT
+    #hidden_states: 0-ToM's updated estimates for this round
+  #OUTPUT
+    #The estimated choice probability of the opponent
+
+  #for each sophistication level k:
+  mean_basic <- hidden_states$own_hidden_states$mean_basic #mean opponent probability estimate VECTOR
+  variance_basic <- hidden_states$own_hidden_states$variance_basic #variance of parameter estimates MATRIX
+  a <- 0.36 #this number is taken from the matlab code in ObsRecGen
+
+  #Prepare variance
+  variance_basic <- exp(variance_basic)
+
+  #calculate opponent's probability of choosing 1
+  p_op_1_basic <- inv.logit(mean_basic / sqrt(1 + a * variance_basic))
+
+  return(p_op_1_basic)
+}
+
+# ##ALTERNATIVE VERSION
+# basic_p_op_1_fun <- function(hidden_states, params){
+#   #0-ToM combines the mean and variance of its parameter estimate into a final choice probability estimate.
+#   #NB: this is the theretically derived function shown in the Reading Wild Minds article (Devaine 2017), which does uses 0-ToM's volatility parameter. 
+#   #As a default the other variant is used
+#   #INPUT
+#     #hidden_states: 0-ToM's updated estimates for this round
+#     #params: a list structure containing 0-ToM's volatility parameter
+#   #OUTPUT
+#     #The estimated choice probability of the opponent
+# 
+#   #input
+#   volatility <- params$volatility
+#   mean_basic <-  hidden_states$own_hidden_states$mean_basic #mean opponent probability estimate VECTOR
+#   variance_basic <-  hidden_states$own_hidden_states$variance_basic #variance of parameter estimates MATRIX
+# 
+#   #Prepare variance
+#   variance_basic <- exp(variance_basic)
+# 
+#   #prepare volatility
+#   volatility <- exp(volatility)
+# 
+#   #calculate opponent's probability of choosing 1
+#   p_op_1_basic <- inv.logit(mean_basic/sqrt(1+(variance_basic+volatility)*3/pi^2))
+# 
+#   return(p_op_1_basic)
+# }
+```
+
+Decision function - opponent probability
+```{r}
+#Probability of opponnent a_op choosing 1
+p_op_1_k_fun <- function(hidden_states, params){
+  #k-ToM combines the mean choice probability estimate and the variances of its parameter estimates into a final choice probability estimate.
+  #NB: this is the function taken from the VBA package (Daunizeau 2014), which does not use k-ToM's volatility parameter
+  #INPUT
+    #hidden_states: k-ToM's updated estimates for this round
+  #OUTPUT
+    #The estimated choice probabilities of the opponent, for each possible opponent level
+
+  #for each sophistication level k:
+  mean <- hidden_states$own_hidden_states$mean #mean opponent probability estimate VECTOR
+  variance <- hidden_states$own_hidden_states$variance #variance of parameter estimates MATRIX
+  gradient <- hidden_states$own_hidden_states$gradient
+  a <- 0.36 #this number is taken from the VBA package function ObsRecGen
+
+  #Prepare variance
+  variance <- rowSums(exp(variance) * gradient^2) #summing the variances of each parameter (after weighting by gradient). One sum per sophistication level
+
+  #calculate opponent's probability of choosing 1
+  p_op_1_k <- inv.logit(mean / sqrt(1 + a * variance))
+
+  return(p_op_1_k)
+}
+
+# ##ALTERNATIVE VERSION
+# p_op_1_k_fun <- function(hidden_states, params){
+#   #k-ToM combines the mean choice probability estimate and the variances of its parameter estimates into a final choice probability estimate.
+#   #NB: this is the theretically derived function shown in the Reading Wild Minds article (Devaine 2017), which does uses k-ToM's volatility parameter. 
+#   #As a default the other variant is used
+# 
+#   #INPUT
+#     #hidden_states: k-ToM's updated estimates for this round
+#     #params: a list structure containing k-ToM's volatility parameter
+#   #OUTPUT
+#     #The estimated choice probabilities of the opponent, for each possible opponent level
+# 
+#   #input
+#   volatility <- params$volatility
+#   volatility_dummy <- params$volatility_dummy #dummy parable flags which parameters are affected by volatility
+#   #for each sophistication level k:
+#   mean <- hidden_states$own_hidden_states$mean #mean opponent probability estimate VECTOR
+#   variance <- hidden_states$own_hidden_states$variance #variance of parameter estimates MATRIX
+#   gradient <- hidden_states$own_hidden_states$gradient
+# 
+#   #prepare volatility
+#   volatility <- exp(volatility)*volatility_dummy
+# 
+#   #Prepare variance
+#   variance <- sum(exp(variance)*gradient^2)
+# 
+#   #calculate opponent's probability of choosing 1
+#   p_op_1_k <- inv.logit(mean/sqrt(1+(variance+volatility)*3/pi^2))
+# 
+#   return(p_op_1_k)
+# }
+
+```
+
+Full decision function 
+```{r}
+decision_function <- function(
+  hidden_states,
+  params,
+  player,
+  level,
+  p_matrix
+) { 
+  #k-ToM's decision function, where it calculates its own choice probability based on the updated estimates
+  #INPUT
+    #hidden_states: k-ToM's updated estimates
+    #params: a list structure containing k-ToM's volatility and behavioural temperature parameters
+    #player: k-ToM's player role, i.e. which side of the payoff matrix is used
+    #level: k-ToM's sophistication level k
+    #p_matrix: a given 2-by-2 payoff matrix
+  #OUTPUT
+    #k-ToM's own choice probability
+  
+  if (level == 0) { #If the (simulated) agent is a 0-ToM
+    
+    #Calculate opponent probability of choosing 1
+    p_op_1 <- basic_p_op_1_fun(hidden_states, params)
+    
+  } else { #If the (simulated) agent is a K-ToM
+    
+    #Calculate opponent probability of choosing 1, for each k
+    p_op_1_k <- p_op_1_k_fun(hidden_states, params)
+  
+    #extract probabilities for each opponent level
+    p_k <- hidden_states$own_hidden_states$p_k
+    
+    #Weigh probabilities by corresponding level probabilities, to calculate an aggregate probability of opponent choosing 1
+    p_op_1 <- sum(p_op_1_k * p_k)
+  }
+  
+  #Calculate the expected payoff difference
+  e_payoff_dif <- expected_payoff_difference(p_op_1, player, p_matrix)
+  
+  #Add bias to expected payoff
+  if ("bias" %in% names(params)) { #only if there is a bias parameter
+      e_payoff_dif = e_payoff_dif + params$bias
+  }
+  
+  #Put into the softmax function to calculate the probability of choosing 1
+  p_self_1 <- softmax(e_payoff_dif, params$behavioural_temperature)
+  
+  #Make into logodds
+  p_self_1 <- logit(p_self_1)
+
+  return(p_self_1)
+  }
+```
+
+Full k-ToM function
+```{r}
+k_ToM <- function(params = "default", hidden_states, player, level = NULL, p_matrix, choice_self = NULL, choice_op = NULL, return_hidden_states = T) {
+  #The full k-ToM function. First it first updates level probability, choice probability, parameter and gradient estimates. Then it calculates the estimated choice proability of the opponent, and calculates its own choice probability in response. The function also contains the simpler 0-ToM strategy, which only updates opponent's choice probability, and reacts.
+  #INPUT:
+    #params: a list structure containing k-ToM's volatility parameter, the dummy variable which decides which parameter estimates are affected by volatility, and the behavioural temperature. If a string is inputted, default values are used.
+    #hidden_states: the estimates from last round
+    #player: k-ToM's player role, i.e. which side of the payoff matrix is used
+    #level: k-ToM's sophistication level k
+    #p_matrix: a given 2-by-2 payoff matrix
+    #choice_self: k-ToM's choice from last round
+    #choice_op: opponent's choice from last round
+  #OUTPUT:
+    #a list structure containing k-ToM's choice and updated estimates
+  
+  if (class(params) != "list"){ #Use default parameter values if nothing else is specified
+    message("No parameter values specified, using default values")
+    
+    params <- list(volatility = -2, # these are the values used in the Matlab script
+                   behavioural_temperature = -1, 
+                   bias = 0,
+                   dilution = 0,
+                   volatility_dummy = c(1,0,0),  #dummy parable flags which parameters are affected by volatility
+                   level = level
+                   )
+  } 
+
+  #if no level where specified use the one specified in the loop
+  if (is.null(level)){ 
+    level <- params$level
+  }
+  
+  #the input comes from last round
+  prev_hidden_states <- hidden_states
+  
+  #bind choices together for easy reorganising
+  choices <- c(choice_self, choice_op)
+  
+  #remove NA parameters, so k-ToM doesn't estimate them for opponent
+  params <- params[is.na(params)==F]
+  
+  if (is.null(choice_self)){ #If first round or missed trial
+    
+    new_hidden_states <- prev_hidden_states #No update
+    
+  } else {
+    
+    #Update hidden states
+     new_hidden_states <- 
+      rec_learning_function(
+        prev_hidden_states,
+        params,
+        choices,
+        level,
+        player,
+        p_matrix)
+  }
+  
+  #Calculate decision probability
+  p_self_1 <- 
+    decision_function(
+      hidden_states = new_hidden_states,
+      params,
+      player,
+      level,
+      p_matrix) 
+  
+  #Make logodds into probability
+  p_self_1 <- inv.logit(p_self_1)
+  
+  #Choose
+  choice <- rbinom(1, 1, p_self_1)
+  
+  return(list(choice = choice, hidden_states = new_hidden_states))
+}
+```
+
+Preparing hidden states for the k-ToM function
+```{r}
+rec_prepare_k_ToM <- function(level, params, priors = "default") { 
+  #A recursive function for preparing the list structure containing estimates which is used in the k-ToM function.
+  #INPUT
+    #level: k-ToM's sophistication level k
+    #priors: a list structure containing all the prior values for k-ToM. If a string is given, default values are used.
+  #OUTPUT
+    #A list structure which is ued as the previous estimates in k-ToM's first round.
+  
+  if (class(priors) != "list"){ #Use default priors if nothing else is specified
+    
+    message("No priors specified, using default priors")
+    
+    #Get the amount of params that k-ToM estimates for its opponent (subtract two for the non-estimated parameters)
+    param_length  <- length(params[is.na(params)==F]) - 2
+    
+    priors <- list(mean_basic = 0, #agnostic
+                   variance_basic = 0, #will be exponated, so exp(0) = 1
+                   mean = 0, #agnostic
+                   variance = rep(0,param_length), #will be exponated, so exp(0) = 1 
+                   param_mean = rep(0,param_length), #not agnostic. These will be exponated efore being used as parameters. So this is a prior of exp(0) = 1
+                   gradient = rep(0,param_length) #is zero. in the Matlab script, one parameter was set to 1 if "flag for noisy" was set. 
+                      #[1] is volatility, [2] is temperature, [3] is bias 
+                   )
+  }
+  
+  #Make empty list for filling with updated values
+  new_hidden_states <- NULL
+  
+  if (level == 0) { #If the (simulated) agent is a 0-ToM
+    
+    #Set prior variance on 0-ToM's estimate of opponent choice probability
+    variance_basic <- priors$variance_basic
+    #Set prior mean on 0-ToM's estimate of opponent choice probability
+    mean_basic <- priors$mean_basic
+    
+    #Gather own hidden states into one list
+    own_hidden_states <- list(mean_basic = mean_basic, variance_basic = variance_basic)
+    
+  } else { #If the (simulated) agent is a K-ToM
+    
+    #Set priors, one for each of opponent's possible sophistication level
+    #Probability is agnostic
+    p_k <- rep(1, level)/level
+    #Mean of opponent choice probability estimate
+    mean <- rep(priors$mean, level)
+    #Variance on parameter estimates
+    variance <- t(matrix(rep(priors$variance, level),
+                        nrow = length(priors$variance)))
+    #Mean of parameter estimates
+    param_mean <- t(matrix(rep(priors$param_mean, level),
+                          nrow = length(priors$param_mean)))
+    #Gradient
+    gradient <- t(matrix(rep(priors$gradient, level),
+                      nrow = length(priors$gradient)))
+    
+    #Gather own hidden states into one list
+    own_hidden_states <- list(p_k = p_k, mean = mean, param_mean = param_mean, variance = variance, gradient = gradient)
+      
+    #Now we need to go through each possible opponent's level one at a time. Highest opponent level is 1 lower than own level
+    for (level_index in 1:level) {
+      
+      #Set the simulated opponents level. "level_index" is one higher than the actual level because it isn't possible to index 0
+      opponent_level <- level_index-1
+      
+      #Get hidden states from simulated opponents
+      new_opponent_hidden_states <- rec_prepare_k_ToM(level = opponent_level, priors) 
+      
+      #Save opponent's hidden states in the list structure. Name it k-ToM
+      eval(parse(text = paste(
+        "new_hidden_states$ToM_",
+        opponent_level,
+        " = new_opponent_hidden_states",
+        sep = "")))
+    }
+  }
+  
+  #Save own updated hidden states to new hidden states
+  new_hidden_states$own_hidden_states <- own_hidden_states
+  
+  return(new_hidden_states)
+}
+```
+
+#Functions for preparing agents
+```{r prepare}
+prepare <- function(strategy_string,
+                    RB = c(prop_mean = 0.5,
+                           prop_sd = 2),
+                    TFT = c(prob_mean = 0.9,
+                            prob_sd = 0.1),
+                    WSLS = c(stay_mean = 0.9,
+                             stay_sd = 0.1,
+                             switch_mean = 0.9,
+                             switch_sd = 0.1),
+                    k_ToM = c(volatility_mean = -2,
+                              volatility_sd = 0.0,
+                              temperature_mean = -1,
+                              temperature_sd = 0.0,
+                              bias_mean = 0,
+                              bias_sd = 0,
+                              dilution_mean = -1,
+                              dilution_sd = 0.0),
+                    k_ToM_priors = "default"){  
+  #Function for generating parameter values and priors for an agent. Parameter values are specified as vectors, where the first number is the mean and the second number is the standard deviation of the normal distribution they are sampled from. If no values are specified, defaults are used. Only the values for the strategy specified are returned.
+  #INPUT
+    #strategy_string: A string of the strategy used by the agent. 
+      #Implemented agent strategies:
+        #RB: Random Bias
+        #TFT: Tit for Tat
+        #WSLS: Win-stay Loose-switch
+        #SoftmaxTitTat: A tit for tat using a softmax function as well as an utility function
+        #k-ToM: a k-level theory of mind agent. Note that you input the desired k-level in place of k, e.g. 1-ToM
+    #RB: A vector of mean and standard deviation of the choice probability parameter
+    #TFT: A vector of mean and standard deviation of the choice probability parameter
+    #WSLS: A vector of mean and standard deviation of the win stay probability and the loose shift parameters
+    #k_ToM: A vector of mean and standard deviation of the volatility and behavioural temperature parameters
+    #k_ToM_priors: A list structure containing priors for all of k-ToM's estimates. This is fed to the red_prepare_k_tom function. If a string is specified, defaults will be used
+  #OUTPUT
+    #A list structure containing the sampled parameter values of the agent and the states for the first round (if any).
+  
+  # Random Bias
+  if (strategy_string == "RB") { 
+    params <- list(
+      "prop" = inv.logit(rnorm(1, mean = logit(RB[1]), sd = RB[2])))
+    hidden_states <- "None"
+    
+  # Win-Stay-Loose-Switch  
+  } else if (strategy_string == "WSLS") { 
+    params <- list(
+      "stay_prob" = inv.logit(rnorm(1, mean = logit(WSLS[1]), sd = WSLS[2])),
+      "switch_prob" = inv.logit(rnorm(1, mean = logit(WSLS[3]), sd = WSLS[4])))
+    hidden_states <- "None"
+    
+  # Tit for Tat
+  } else if (strategy_string == "TFT") {
+    params <- list(
+      "copy_prob" = inv.logit(rnorm(1, mean = logit(TFT[1]), sd = TFT[2])))
+    hidden_states <- "None"
+  
+  # K-ToM    
+  } else if (grepl("-ToM", strategy_string)) { 
+    level <- as.numeric(str_extract(strategy_string, "[0-9]")) #save the level
+    suppressWarnings(
+      params <- list( #Save params
+        volatility = rnorm(1, mean = k_ToM[1], sd = k_ToM[2]),
+        behavioural_temperature = rnorm(1, mean = k_ToM[3], sd = k_ToM[4]),
+        bias = rnorm(1, mean = k_ToM[5], sd = k_ToM[6]),
+        dilution = rnorm(1, mean = k_ToM[7], sd = k_ToM[8])
+        ))
+    #Include non-variable parameters
+    params$volatility_dummy <- c(1, 
+                                 rep(0,length(params[is.na(params) == F]) - 1)
+                                 )
+    params$level <- level
+    #Run prepare kToM
+    hidden_states <- rec_prepare_k_ToM(level = level, params = params, priors = k_ToM_priors)
+    
+  } else if (strategy_string == "PlaySelf") {
+    params <- list(
+      "player" = "A human player is playing")
+    hidden_states <- "None"
+  } else { #if no strategy is recognized
+    stop("Could not find strategy, try to check for spelling errors")
+  }
+  
+  result <- list(params = params, hidden_states = hidden_states)
+  return(result)
+}
+
+create_agents <- function(strategies, match_up = "RR", prepare_with_defaults = T){
+  #Creates a dataframe with agents and their opponents.
+  #If prepare_with_defaults is set to TRUE, this also prepares their parameter values and priors, which can fed to the compete function.
+  #If prepare_with_defaults is set to FALSE, the output needs to be inserted into the prepare_df function.
+  #INPUT
+    #strategies: A list of strategies given as a vector
+      #implemented agent strategies
+        #RB: Random Bias
+        #TFT: Tit for Tat
+        #WSLS: Win-stay Loose-switch
+        #SoftmaxTitTat: A tit for tat using a softmax function as well as an utility function
+        #k-ToM: a k-level theory of mind agent. Note that you input the desired k-level in place of k, e.g. 1-ToM
+  #match_up: a string argument deciding which tournament structure is used
+    #implemented matchup types include
+      #RR: Round robin, every strategy in the strategies input matched up against every other strategy
+      #random: The strategies in the strategies input is randomly matched up
+      #half_half: the first half is matched up with the second half
+  #OUTPUT
+    #A dataframe with the created agents matched up. If prepare_with_defaults is set to TRUE, parameter values and priors have also been set.
+  
+  if (match_up == "RR"){
+    output <- as_data_frame(t(combn(strategies, 2))) %>% dplyr::select(player1 = V1, player2 = V2)
+  } else if (match_up == "half_half" & length(strategies) %% 2 == 0){
+    output <- as_data_frame(matrix(strategies, ncol = 2)) %>% dplyr::select(player1 = V1, player2 = V2)
+  } else if (match_up == "random" & length(strategies) %% 2 == 0){
+    output <- as_data_frame(matrix(sample(strategies, replace=F), ncol = 2)) %>% dplyr::select(player1 = V1, player2 = V2)
+  } else {
+    stop("Please input valid match_up type 
+         or if using 'half_half' or 'random' make sure that your strategies input has an even length")
+  }
+  
+  if (prepare_with_defaults){
+    
+        #calling the prepare function
+    tmp1 <- sapply(output$player1, prepare)
+    tmp2 <- sapply(output$player2, prepare)
+      #save params
+    output$params_p1 <- t(tmp1)[,1]
+    output$params_p2 <- t(tmp2)[,1]
+      #Save hidden states
+    output$hidden_states_p1 <- t(tmp1)[,2]
+    output$hidden_states_p2 <- t(tmp2)[,2]
+  }
+
+  return(output)
+}
+
+prepare_df <- function(agent_df_unprep, args = NULL){ 
+  #Sets parameter values and priors for agents in a matched-up dataframe, to be fed to the compete function. 
+  #INPUT
+    #agent_df_unprep: a tibble with agent strategies matched up, but without set parameter values and prios. Created by the prepare_agents function
+    #args, a string vector of arguments to pass to the prepare function
+      #Two string per competing pair, the first for player 1 and the second for player 2, in the order they appear in the dataframe
+  #OUTPUT
+    #A dataframe with agents matched up and with parameter values and priors, to be fed to the compete function
+  
+  p1_args <- args[1:(nrow(agent_df_unprep))]
+  
+  p2_args <- args[-(1:(nrow(agent_df_unprep)))]
+
+    #adding commas for the eval expression, should only be there is there is aditional arguments
+  if_else(nchar(p1_args) != 0 ,paste(",", p1_args), p1_args) 
+  if_else(nchar(p2_args) != 0 ,paste(",", p2_args), p2_args)
+  
+    #Make variables for saving - this prevents an error regarding unitialized columns
+  agent_df_unprep$params_p1 <- NA
+  agent_df_unprep$params_p2 <- NA
+  
+  agent_df_unprep$hidden_states_p1 <- NA
+  agent_df_unprep$hidden_states_p2 <- NA
+    
+  for (i in 1:length(p1_args)){
+    eval(parse(text = 
+                 paste("tmp <- prepare(strategy_string = ", "'", agent_df_unprep$player1[i], "'", ", ", p1_args[i],")", sep = "")))
+    agent_df_unprep$params_p1[i] <- list(tmp$params)
+    agent_df_unprep$hidden_states_p1[i] <- list(tmp$hidden_states)
+    eval(parse(text = 
+                 paste("tmp <- prepare(strategy_string = ", "'", agent_df_unprep$player2[i], "'", ", ", p2_args[i],")", sep = "")))
+    agent_df_unprep$params_p2[i] <- list(tmp$params)
+    agent_df_unprep$hidden_states_p2[i] <- list(tmp$hidden_states)
+  }
+  
+  return(agent_df_unprep)
+}
+```
+
+#Compete function
+```{r compete}
+compete <- function(player1, player2, p1_params, p2_params, p1_hidden_states = NA, p2_hidden_states = NA, p_matrix, n_rounds = 10){ 
+  #Makes two agents play against each other a set number of rounds
+  #INPUT
+    #player1: player 1's strategy function
+    #player2: player 2's strategy function
+    #p1_params: a list structure containing player 1's parameter values
+    #p2_params: a list structure containing player 2's parameter values¨
+    #p1_hidden_states: player 1's starting states, i.e. priors
+    #p2_hidden_states: player 2's starting states, i.e. priors
+    #p_matrix: a given 2-by-2 payoff matrix
+    #n_rounds: number of rounds to compete
+  #OUTPUT
+    #A dataframe containing the two agents' choices, rewards and states, for each round
+  
+    #this is for when the compete_all function is used - it simply unpacks the apply function
+  if (class(player1) == "list"){ 
+    p2_hidden_states <- list(player1[[6]])
+    p1_hidden_states <- list(player1[[5]])
+    p2_params <- list(player1[[4]])
+    p1_params <- list(player1[[3]])
+    player2 <- player1[[2]]
+    player1 <- player1[[1]]
+  }
+  
+  if(is.na(p1_hidden_states) | is.na(p2_hidden_states)){ 
+    message("One of both of the hidden states were not specified, hopefully your agents don't need them. 
+            If they do you should specifiy the hidden states")
+  }
+  
+    #setting to NULL to signify it is the first round
+  p1_choice <- NULL
+  p2_choice <- NULL
+  
+    #fetch strategy function - just the player name unless it is a k-ToM
+  strat_p1 <- if_else(grepl("-ToM", player1), "k_ToM", player1)
+  strat_p2 <- if_else(grepl("-ToM", player2), "k_ToM", player2)
+  
+  #Progressbar only used if neither player is a human
+  progressbar = strat_p1 != "PlaySelf" & strat_p2 != "PlaySelf"
+  
+  if (progressbar) {
+    #Print current pair
+    message(paste("Current players: ", player1, " vs ", player2, sep = ""))
+    #Create progress bar
+    pb <- txtProgressBar(min = 0, max = n_rounds, style = 3)}
+
+  for (round in 1:n_rounds){
+   
+    if (progressbar) {setTxtProgressBar(pb, round)}
+    
+      #calls the strategy function for each agent and gives it the player as a argument 
+    p1 <- do.call(strat_p1, 
+                         args = list(params = p1_params[[1]],
+                                     player = 0,
+                                     hidden_states = p1_hidden_states[[1]],
+                                     p_matrix = p_matrix,
+                                     choice_self = p1_choice,
+                                     choice_op = p2_choice,
+                                     return_hidden_states = T
+                                     ))
+  
+    p2 <- do.call(strat_p2, 
+                           args = list(params = p2_params[[1]],
+                                       hidden_states = p2_hidden_states[[1]], 
+                                       player = 1,
+                                       p_matrix = p_matrix,
+                                       choice_self = p2_choice,
+                                       choice_op = p1_choice,
+                                       return_hidden_states = T
+                                       ))
+        #params = "default", hidden_states, player, level, p_matrix, choice_self, choice_op, return_hidden_states = T
+
+    
+      #results for next round 
+    p1_hidden_states <- list(p1$hidden_states)
+    p2_hidden_states <- list(p2$hidden_states)
+    p1_choice <- p1$choice
+    p2_choice <- p2$choice
+    
+      #generate result
+    result <- p_matrix[p_matrix$p1_choice == p1_choice & p_matrix$p2_choice == p2_choice,]
+    
+    
+
+    
+    
+    #save results
+    round_result <- data_frame(player = c(player1, player2),  
+                               choice = c(p1$choice, p2$choice),
+                               points = c(result$p1_reward, result$p2_reward), 
+                               round_nr = round, 
+                               pair = paste(player1, player2, sep = " / "),
+                               hidden_states = c(p1_hidden_states, p2_hidden_states)
+                               )
+  
+    if (round == 1){
+      result_df <- round_result
+    } else {
+      result_df <- rbind(result_df, round_result)
+    }
+  }
+  if (progressbar) {close(pb)}
+  return(result_df)
+}
+
+compete_all <- function(agent_df, p_matrix, n_rounds = 10){  
+  #A function for making all agents in a dataframe compete
+  #INPUT
+    #agent_df: A tibble (dataframe) with matched agents their parameter values and priors. Created with create_agents and/or prepare_df
+    #n_rounds: number of rounds the agents compete
+    #p_matrix: A given 2-by-2 payoff matrix
+  #OUTPUT
+    #A tibble (dataframe) containing the choices, rewards and states for every round, and for every competing pair
+  
+  result_list <- apply(agent_df, 1, compete, n_rounds = n_rounds, p_matrix = p_matrix)
+  result_df <- result_list %>% bind_rows()
+  
+  return(result_df)
+}
+```
+#Simulation
+```{r simulation}
+# #Setting seed
+# set.seed(2)
+# 
+# #Get penny matrix
+# penny_competitive_matrix = fetch_p_matrix("penny_competitive")
+# 
+# #Simulation settings
+# nsims = 10
+# nrounds = 50
+# 
+# #Define strategies used
+# strategies_unprep <- c("RB", "1-ToM")
+# 
+# for (x in 1:1) {
+#   result_list = NULL
+#   for (i in 1:nsims) {
+#     message(x);message(i)
+# 
+#     #Prepare agents and competition dataframe
+#     agent_df <- create_agents(strategies_unprep, match_up = "RR", prepare_with_defaults = T)
+# 
+#     #Make all agents in the dataframe compete
+#     result_df_single <- compete_all(agent_df, n_rounds = nrounds, p_matrix = penny_competitive_matrix)
+# 
+#     #Add column with simulation number
+#     result_df_single$sim = i
+# 
+#     result_list[[i]] <- result_df_single
+#   }
+# 
+#   result_df <- result_list %>% bind_rows()
+#   #eval(parse( text = paste("save(result_df_bias, file = 'result_df_", x, ".rda')", sep = "")))
+# }
+```
+
+#Human Player code
+```{r}
+# #Fetch payoff-matrix
+# penny_competitive_matrix = fetch_p_matrix("penny_competitive")
+# p_matrix = penny_competitive_matrix
+# #Set opponent
+# agent_dfVS <- create_agents(c("PlaySelf", "2-ToM"), match_up = "RR", prepare_with_defaults = T)
+# 
+# #Run game
+# result_df_player <- compete(player1 = agent_dfVS$player1,
+#               player2 = agent_dfVS$player2,
+#               p1_params = agent_dfVS$params_p1,
+#               p2_params = agent_dfVS$params_p2,
+#               p1_hidden_states = agent_dfVS$hidden_states_p1,
+#               p2_hidden_states = agent_dfVS$hidden_states_p2,
+#               p_matrix = penny_competitive_matrix,
+#               n_rounds = 10
+#               )
+```
+
+
