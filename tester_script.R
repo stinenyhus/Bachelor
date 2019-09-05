@@ -25,3 +25,5 @@ rec_learning_function(
   
 t(exp(c(0,0))) %*% c(0,0)^2 
 
+
+#Adding comment good bachelor much wow 
